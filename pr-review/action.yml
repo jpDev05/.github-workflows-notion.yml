@@ -33,22 +33,22 @@ inputs:
 outputs:
   quality:
     description: Overall quality score.
-    value: \${{ steps.review.outputs.quality }}
+    value: ${{ steps.review.outputs.quality }}
   security:
     description: Security score.
-    value: \${{ steps.review.outputs.security }}
+    value: ${{ steps.review.outputs.security }}
   maintainability:
     description: Maintainability score.
-    value: \${{ steps.review.outputs.maintainability }}
+    value: ${{ steps.review.outputs.maintainability }}
   risk:
     description: Overall risk.
-    value: \${{ steps.review.outputs.risk }}
+    value: ${{ steps.review.outputs.risk }}
   confidence:
     description: Review confidence.
-    value: \${{ steps.review.outputs.confidence }}
+    value: ${{ steps.review.outputs.confidence }}
   review-event:
     description: GitHub review event actually submitted.
-    value: \${{ steps.review.outputs.review-event }}
+    value: ${{ steps.review.outputs.review-event }}
 
 runs:
   using: composite
@@ -57,18 +57,18 @@ runs:
       id: review
       shell: bash
       env:
-        GROQ_API_KEY: \${{ inputs.groq-api-key }}
-        GITHUB_TOKEN: \${{ inputs.github-token }}
-        GROQ_MODEL: \${{ inputs.groq-model }}
-        AI_DEVOPS_REVIEW_EVENT: \${{ inputs.review-event }}
-        AI_DEVOPS_MIN_SCORE: \${{ inputs.min-score }}
-        AI_DEVOPS_FAIL_ON_HIGH_RISK: \${{ inputs.fail-on-high-risk }}
-        AI_DEVOPS_MAX_INLINE_FINDINGS: \${{ inputs.max-inline-findings }}
-        REPOSITORY: \${{ github.repository }}
-        PR_NUMBER: \${{ github.event.pull_request.number }}
-        BASE_SHA: \${{ github.event.pull_request.base.sha }}
-        HEAD_SHA: \${{ github.event.pull_request.head.sha }}
-        MERGE_SHA: \${{ github.sha }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GROQ_MODEL: ${{ inputs.groq-model }}
+        AI_DEVOPS_REVIEW_EVENT: ${{ inputs.review-event }}
+        AI_DEVOPS_MIN_SCORE: ${{ inputs.min-score }}
+        AI_DEVOPS_FAIL_ON_HIGH_RISK: ${{ inputs.fail-on-high-risk }}
+        AI_DEVOPS_MAX_INLINE_FINDINGS: ${{ inputs.max-inline-findings }}
+        REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        MERGE_SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
         test -n "\${GROQ_API_KEY}" || {
