@@ -206,6 +206,64 @@ Example:
     echo "Risk: ${{ steps.review.outputs.risk }}"
 ```
 
+## 🧠 Pull Request Intelligence
+
+AI DevOps v2 adds a dedicated PR review action that can:
+
+- analyze the pull request diff with Groq Structured Outputs;
+- publish a professional review directly in the PR;
+- create inline findings only on verified added lines;
+- expose quality, security, maintainability, risk and confidence;
+- use COMMENT, REQUEST_CHANGES or guarded APPROVE;
+- enforce an optional quality gate.
+
+Example:
+
+```yaml
+name: AI DevOps PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: jpDev05/.github-workflows-notion.yml/pr-review@v2
+        with:
+          groq-api-key: ${{ secrets.GROQ_API_KEY }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          review-event: COMMENT
+```
+
+Use `REQUEST_CHANGES` only when your team explicitly wants the AI review to
+participate in merge blocking. `APPROVE` is guarded and is downgraded to
+`COMMENT` when high-risk or high-severity findings exist.
+
+### 🔒 Fork security
+
+The default PR workflow uses `pull_request` and least-privilege permissions.
+GitHub does not provide repository secrets to workflows triggered by fork PRs
+under normal policy, so the example skips the Groq review when the key is not
+available. Do not switch this to `pull_request_target` just to expose secrets
+to untrusted code.
+
+### ⚙️ Repository policy
+
+Copy `config/.ai-devops.yml` to the root of a consuming repository as
+`.ai-devops.yml` and adapt the review policy for the project.
+
 ## 📚 Notion
 
 When enabled, AI DevOps creates or updates the project's Notion page with:
@@ -227,18 +285,15 @@ When enabled, AI DevOps creates or updates the project's Notion page with:
 
 ## 🏗️ Architecture
 
+The product now has separate commit and pull-request automation surfaces.
+
+See the detailed trust boundaries and review lifecycle in `docs/ARCHITECTURE.md`.
+
 ```text
-ai-devops/
-├── action.yml
-├── notion_sync.py
-├── .github/
-│   └── workflows/
-│       └── notion.yml
-└── README.md
+Push → Core Action → Groq → Scores → Step Summary + Notion
+
+PR   → PR Review Action → Groq → Finding validation → GitHub review
 ```
-
-The Python engine is intentionally dependency-free and uses the Python standard library so the GitHub-hosted runner does not need a package installation step.
-
 ## 🛣️ Roadmap
 
 ### v1 — Foundation
@@ -251,8 +306,12 @@ The Python engine is intentionally dependency-free and uses the Python standard 
 - [x] GitHub Step Summary
 
 ### v2 — Engineering Platform
-- [ ] Pull Request review comments
-- [ ] Inline findings
+- [x] Pull Request review
+- [x] Inline findings
+- [x] COMMENT / REQUEST_CHANGES / guarded APPROVE
+- [x] PR quality gate
+- [x] Architecture documentation
+- [x] Repository policy template
 - [ ] Test execution evidence
 - [ ] Repository architecture memory
 - [ ] Changelog automation
@@ -260,13 +319,11 @@ The Python engine is intentionally dependency-free and uses the Python standard 
 - [ ] More output providers
 
 ### v3 — Open Source Platform
-- [ ] Configuration file
 - [ ] Multiple AI providers
 - [ ] Versioned review policies
 - [ ] Review profiles
 - [ ] Dashboard
 - [ ] GitHub Marketplace publication
-
 ## 🤝 Contributing
 
 Pull requests are welcome.
