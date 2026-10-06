@@ -1498,6 +1498,23 @@ if low_score:
 
 print("✅ AI DevOps review concluído com sucesso.")
 
+# Outputs para GitHub Actions
+github_output = os.environ.get("GITHUB_OUTPUT")
+
+if github_output:
+    with open(
+        github_output,
+        "a",
+        encoding="utf-8"
+    ) as output_file:
+        output_file.write(
+            f"quality={quality:.1f}\n"
+            f"security={security_score:.1f}\n"
+            f"maintainability={maintainability:.1f}\n"
+            f"risk={risk}\n"
+            f"confidence={confidence:.2f}\n"
+        )
+
 
 
 # =========================================================
