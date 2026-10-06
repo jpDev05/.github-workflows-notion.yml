@@ -1,0 +1,40 @@
+name: AI DevOps PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    env:
+      GROQ_API_KEY: \${{ secrets.GROQ_API_KEY }}
+
+    steps:
+      - name: Checkout do merge result da PR
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: AI DevOps PR Review
+        if: \${{ env.GROQ_API_KEY != '' }}
+        uses: jpDev05/.github-workflows-notion.yml/pr-review@v2
+        with:
+          groq-api-key: \${{ secrets.GROQ_API_KEY }}
+          github-token: \${{ secrets.GITHUB_TOKEN }}
+          groq-model: openai/gpt-oss-20b
+          review-event: COMMENT
+          min-score: "0"
+          fail-on-high-risk: "false"
+          max-inline-findings: "8"
+
+      - name: Aviso de configuração
+        if: \${{ env.GROQ_API_KEY == '' }}
+        run: echo "::warning::GROQ_API_KEY não configurado; PR Review foi ignorado."
