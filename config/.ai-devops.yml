@@ -1,0 +1,25 @@
+# AI DevOps repository policy
+# Copy to the root of a consuming repository as .ai-devops.yml.
+
+version: 1
+
+review:
+  language: pt-BR
+  profile: professional
+  max_inline_findings: 8
+  min_score: 0
+  fail_on_high_risk: false
+
+security:
+  evidence_first: true
+  report_hypotheses_as_findings: false
+
+pull_request:
+  event: COMMENT
+
+paths:
+  ignore:
+    - "*.lock"
+    - "dist/**"
+    - "build/**"
+    - "coverage/**"
