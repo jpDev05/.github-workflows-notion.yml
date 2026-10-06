@@ -206,6 +206,52 @@ Example:
     echo "Risk: ${{ steps.review.outputs.risk }}"
 ```
 
+## 🛡️ Security Intelligence
+
+AI DevOps now combines AI review with deterministic security automation.
+
+### Built-in layers
+
+- high-signal secret-pattern scanner;
+- CodeQL v4 for Python and GitHub Actions;
+- Dependabot configuration for GitHub Actions and Python dependencies;
+- evidence-first AI security review;
+- least-privilege workflow permissions.
+
+The deterministic scanner is intentionally conservative. It reports high-signal
+patterns for human validation instead of pretending that a regex is a complete
+security audit.
+
+## 🧪 Test Intelligence
+
+The repository includes a dependency-light test runner that detects common
+project layouts:
+
+- Python / pytest;
+- Node / npm;
+- Maven;
+- Gradle;
+- Go;
+- Rust.
+
+Test execution is enabled on push/manual workflows by default. PR review does
+not execute arbitrary project tests with privileged secrets.
+
+## 🧠 AI Evaluation
+
+AI DevOps now has an explicit evaluation standard covering:
+
+- correct positives;
+- correct negatives;
+- false-positive resistance;
+- security precision;
+- line anchoring;
+- confidence calibration.
+
+The goal is not to maximize the number of findings. The goal is to maximize
+**useful, evidence-backed findings**.
+
+See docs/AI_EVALUATION.md and tests/fixtures/review-fixtures.md.
 ## 🧠 Pull Request Intelligence
 
 AI DevOps v2 adds a dedicated PR review action that can:
@@ -312,17 +358,25 @@ PR   → PR Review Action → Groq → Finding validation → GitHub review
 - [x] PR quality gate
 - [x] Architecture documentation
 - [x] Repository policy template
-- [ ] Test execution evidence
+- [x] Security Intelligence
+- [x] CodeQL integration
+- [x] Test Intelligence
+- [x] AI evaluation standard
+- [x] Dependabot
+- [ ] Test evidence inside PR review
 - [ ] Repository architecture memory
 - [ ] Changelog automation
 - [ ] README automation
 - [ ] More output providers
 
 ### v3 — Open Source Platform
+- [ ] AI Fix proposals
+- [ ] Safe automatic fix PRs
 - [ ] Multiple AI providers
 - [ ] Versioned review policies
 - [ ] Review profiles
 - [ ] Dashboard
+- [ ] Quality badges
 - [ ] GitHub Marketplace publication
 ## 🤝 Contributing
 
