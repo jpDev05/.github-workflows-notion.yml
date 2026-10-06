@@ -14,8 +14,21 @@ PATTERNS = [
     ("HIGH", "Possível token Slack", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b")),
     ("MEDIUM", "Execução dinâmica potencialmente perigosa em Python", re.compile(r"\b(?:eval|exec)\s*\(")),
     ("MEDIUM", "Shell com interpolação direta pode exigir validação", re.compile(r"\bos\.system\s*\(")),
-    ("MEDIUM", "SQL construído por concatenação/interpolação", re.compile(r"(?i)(?:select|insert|update|delete)\b.{0,120}(?:\+|f['\"]|\.format\s*\(")),
+    ("MEDIUM", "SQL construído por concatenação/interpolação", re.compile(r'(?i)\b(?:select|insert|update|delete)\b.{0,120}(?:\+|\.format\s*\(|f["\'])')),
 ]
+def scan_text(text):
+    findings = []
+    for number, line in enumerate(text.splitlines(), 1):
+        for severity, title, pattern in PATTERNS:
+            if pattern.search(line):
+                findings.append({
+                    "severity": severity,
+                    "line": number,
+                    "title": title,
+                    "evidence": "Pattern de alto sinal detectado; validação humana recomendada.",
+                })
+    return findings
+
 def iter_files():
     for path in ROOT.rglob("*"):
         if path.is_file() and not any(part in SKIP_DIRS for part in path.parts):
@@ -26,10 +39,9 @@ def main():
     for path in iter_files():
         try: lines=path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError: continue
-        for number,line in enumerate(lines,1):
-            for severity,title,pattern in PATTERNS:
-                if pattern.search(line):
-                    findings.append({"severity":severity,"file":str(path.relative_to(ROOT)),"line":number,"title":title,"evidence":"Pattern de alto sinal detectado; validação humana recomendada."})
+        for item in scan_text("\n".join(lines)):
+            item["file"] = str(path.relative_to(ROOT))
+            findings.append(item)
     result={"scanner":"ai-devops-security-scan","findings":findings,"count":len(findings),"high":sum(x["severity"]=="HIGH" for x in findings),"medium":sum(x["severity"]=="MEDIUM" for x in findings)}
     print(json.dumps(result,ensure_ascii=False,indent=2))
     if os.environ.get("FAIL_ON_SECURITY_FINDINGS","false").lower()=="true" and findings: raise SystemExit(2)
