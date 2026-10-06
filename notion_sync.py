@@ -1015,16 +1015,36 @@ def normalize_review(data):
     if data.get("risco") not in ALLOWED_RISK:
         data["risco"] = "Médio"
 
-    for field in (
+    score_fields = (
         "qualidade",
         "seguranca_nota",
         "manutenibilidade"
-    ):
+    )
+
+    valid_scores = [
+        clamp_score(data.get(field))
+        for field in score_fields
+        if clamp_score(data.get(field)) is not None
+    ]
+
+    for field in score_fields:
         score_value = clamp_score(data.get(field))
 
         if score_value is None:
-            raise RuntimeError(
-                f"Nota inválida ou ausente: {field}"
+            if not valid_scores:
+                raise RuntimeError(
+                    f"Nota inválida ou ausente: {field}"
+                )
+
+            score_value = round(
+                sum(valid_scores) / len(valid_scores),
+                1
+            )
+
+            print(
+                f"⚠️ Score ausente na recuperação estruturada: "
+                f"{field}; usando média dos scores disponíveis: "
+                f"{score_value}"
             )
 
         data[field] = score_value
