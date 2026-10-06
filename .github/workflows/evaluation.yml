@@ -25,6 +25,8 @@ jobs:
           python-version: "3.x"
       - name: Validate Python syntax
         run: python -m compileall -q pr-review scripts tests
+      - name: Install YAML parser
+        run: python -m pip install pyyaml
       - name: Validate YAML
         run: |
           python - <<'PY'
