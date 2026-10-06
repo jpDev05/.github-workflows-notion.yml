@@ -11,12 +11,38 @@ import time
 # CONFIGURAÇÕES
 # =========================================================
 
-TOKEN = os.environ["NOTION_TOKEN"]
-GROQ_API_KEY = os.environ["GROQ_API_KEY"]
+NOTION_ENABLED = os.environ.get("NOTION_ENABLED", "true").lower() == "true"
+TOKEN = os.environ.get("NOTION_TOKEN", "")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 VERSION = "2025-09-03"
 
-DATA_SOURCE = "d4190e15-cd71-4d55-8706-1ccfeb0227fd"
+DATA_SOURCE = os.environ.get(
+    "NOTION_DATA_SOURCE",
+    "d4190e15-cd71-4d55-8706-1ccfeb0227fd"
+)
+
+GROQ_MODEL = os.environ.get(
+    "GROQ_MODEL",
+    "openai/gpt-oss-20b"
+)
+
+MIN_SCORE = float(
+    os.environ.get("AI_DEVOPS_MIN_SCORE", "0")
+)
+
+FAIL_ON_HIGH_RISK = (
+    os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK", "false").lower()
+    == "true"
+)
+
+if not GROQ_API_KEY:
+    raise RuntimeError("GROQ_API_KEY não configurado.")
+
+if NOTION_ENABLED and not TOKEN:
+    raise RuntimeError(
+        "NOTION_TOKEN não configurado enquanto NOTION_ENABLED=true."
+    )
 
 
 # =========================================================
@@ -48,6 +74,9 @@ REPO_URL = os.environ["REPOSITORY_URL"]
 
 COMMIT_URL = os.environ["COMMIT_URL"]
 
+EVENT_NAME = os.environ.get("GITHUB_EVENT_NAME", "unknown")
+PR_NUMBER = os.environ.get("PR_NUMBER", "")
+
 PROJECT = REPO.split(
     "/",
     1
@@ -65,6 +94,50 @@ def git(*args):
         text=True,
         stderr=subprocess.DEVNULL
     ).strip()
+
+
+def read_text_file(path, limit=5000):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as file:
+            return file.read()[:limit]
+    except (OSError, UnicodeError):
+        return ""
+
+
+def project_context():
+    candidates = [
+        "README.md",
+        "README",
+        "package.json",
+        "requirements.txt",
+        "pyproject.toml",
+        "pom.xml",
+        "build.gradle",
+        "go.mod",
+        "Cargo.toml",
+        "composer.json",
+        "Gemfile",
+        "Dockerfile",
+        "docker-compose.yml",
+        "tsconfig.json",
+    ]
+
+    sections = []
+
+    for path in candidates:
+        content = read_text_file(path)
+
+        if content:
+            sections.append(
+                f"===== {path} =====\n{content}"
+            )
+
+    context = "\n\n".join(sections)
+
+    return context[:18000]
+
+
+PROJECT_CONTEXT = project_context()
 
 
 # =========================================================
@@ -125,263 +198,309 @@ def notion(
 
 
 # =========================================================
-# GROQ
+# GROQ — ENGINE DE CODE REVIEW
 # =========================================================
 
+REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "categoria": {
+            "type": "string",
+            "enum": [
+                "✨ Feature",
+                "🐛 Correção",
+                "📚 Documentação",
+                "♻️ Refatoração",
+                "🧪 Teste",
+                "🔐 Segurança",
+                "⚡ Performance",
+                "🔧 Manutenção",
+                "📝 Alteração"
+            ]
+        },
+        "resumo_executivo": {"type": "string"},
+        "o_que_foi_alterado": {"type": "string"},
+        "como_funciona": {"type": "string"},
+        "impacto": {"type": "string"},
+        "pontos_fortes": {
+            "type": "array",
+            "items": {"type": "string"}
+        },
+        "compatibilidade": {"type": "string"},
+        "regressao": {"type": "string"},
+        "performance": {"type": "string"},
+        "seguranca": {"type": "string"},
+        "testes": {"type": "string"},
+        "melhorias": {"type": "string"},
+        "problemas_encontrados": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "severidade": {
+                        "type": "string",
+                        "enum": ["Baixa", "Média", "Alta"]
+                    },
+                    "problema": {"type": "string"},
+                    "arquivo": {"type": "string"},
+                    "linha": {"type": "string"},
+                    "evidencia": {"type": "string"},
+                    "sugestao": {"type": "string"},
+                    "confianca": {"type": "number"}
+                },
+                "required": [
+                    "severidade",
+                    "problema",
+                    "arquivo",
+                    "linha",
+                    "evidencia",
+                    "sugestao",
+                    "confianca"
+                ],
+                "additionalProperties": False
+            }
+        },
+        "qualidade": {"type": "number"},
+        "seguranca_nota": {"type": "number"},
+        "manutenibilidade": {"type": "number"},
+        "risco": {
+            "type": "string",
+            "enum": ["Baixo", "Médio", "Alto"]
+        },
+        "confianca_geral": {"type": "number"},
+        "arquivos_principais": {
+            "type": "array",
+            "items": {"type": "string"}
+        }
+    },
+    "required": [
+        "categoria",
+        "resumo_executivo",
+        "o_que_foi_alterado",
+        "como_funciona",
+        "impacto",
+        "pontos_fortes",
+        "compatibilidade",
+        "regressao",
+        "performance",
+        "seguranca",
+        "testes",
+        "melhorias",
+        "problemas_encontrados",
+        "qualidade",
+        "seguranca_nota",
+        "manutenibilidade",
+        "risco",
+        "confianca_geral",
+        "arquivos_principais"
+    ],
+    "additionalProperties": False
+}
+
+
+SYSTEM_PROMPT = """
+Você é o AI DevOps Reviewer de uma plataforma profissional de engenharia
+de software.
+
+Seu trabalho é analisar mudanças de código com rigor de code review sênior,
+segurança de aplicações, testes, manutenção, arquitetura e engenharia de
+software.
+
+PRINCÍPIO CENTRAL: EVIDÊNCIA ANTES DE OPINIÃO.
+
+Você só pode afirmar algo como fato quando existir evidência suficiente no
+commit, diff, arquivos alterados ou contexto do projeto fornecido.
+
+NUNCA:
+- invente funcionalidades;
+- invente arquivos;
+- invente linhas;
+- invente vulnerabilidades;
+- invente testes executados;
+- invente resultados de testes;
+- afirme que o código compilou sem evidência;
+- afirme que uma vulnerabilidade existe apenas porque "poderia existir";
+- transforme uma possibilidade em certeza;
+- trate ausência de evidência como prova de segurança;
+- recomende uma mudança apenas por preferência pessoal;
+- critique código que não foi alterado sem explicar claramente por que ele
+  é diretamente afetado pela alteração.
+
+QUANDO HOUVER INCERTEZA:
+- diga explicitamente que não é possível determinar;
+- reduza a confiança;
+- não transforme hipótese em problema confirmado.
+
+REGRA ESPECIAL PARA PYTHON:
+Quando o código analisado estiver dentro de uma f-string Python, {{ e }}
+podem ser escapes intencionais para produzir { e } literais.
+NÃO confunda isso com Jinja, erro de sintaxe ou código inválido.
+Só classifique como erro se o contexto real do código sustentar essa conclusão.
+
+REGRA DE LINHAS:
+Só informe uma linha quando ela puder ser sustentada pelo diff.
+Caso contrário, use "N/A".
+
+SEGURANÇA:
+Analise, quando houver evidência:
+- exposição de segredos;
+- autenticação e autorização;
+- injeção;
+- execução arbitrária;
+- validação de entrada;
+- manipulação insegura de dados;
+- permissões;
+- criptografia;
+- logs com dados sensíveis;
+- SSRF;
+- XSS;
+- SQL injection;
+- command injection;
+- path traversal;
+- desserialização insegura;
+- dependências/configurações claramente perigosas.
+
+Não faça checklist cego. Só reporte uma categoria quando houver evidência
+relevante.
+
+BUGS:
+Procure inconsistências de lógica, estados impossíveis, erros de fluxo,
+tratamento de exceções, valores nulos, limites, concorrência e regressões
+quando o diff fornecer evidência suficiente.
+
+TESTES:
+Não diga que testes foram executados se eles não aparecem nas evidências.
+Separe claramente:
+- testes observados no diff;
+- testes recomendados.
+
+NOTAS:
+0–10.
+As notas devem refletir SOMENTE a alteração analisada.
+Não use 0 como valor padrão.
+Uma alteração simples e correta pode ter nota alta.
+Uma alteração incompleta ou arriscada deve receber nota proporcional.
+
+RISCO:
+Baixo = mudança localizada e sem impacto perigoso evidente.
+Médio = mudança com possibilidade razoável de regressão ou impacto relevante.
+Alto = evidência de defeito grave, vulnerabilidade grave ou alteração crítica.
+
+CONFIANÇA:
+0.0–1.0.
+Alta confiança somente quando a evidência é direta e suficiente.
+
+QUALIDADE DO REVIEW:
+Se não houver problema real, NÃO invente um problema para preencher a lista.
+Use "Nenhum problema evidente no diff.".
+
+Escreva em português do Brasil, com linguagem profissional, objetiva e
+tecnicamente precisa.
+"""
+
+
 def groq(prompt):
-
     body = {
-
-        "model": "openai/gpt-oss-20b",
-
+        "model": GROQ_MODEL,
         "messages": [
-
             {
                 "role": "system",
-
-                "content": (
-                    "Você é um engenheiro de software "
-                    "sênior, especialista em documentação, "
-                    "code review, segurança e testes. "
-
-                    "Analise SOMENTE o commit e o diff "
-                    "fornecidos. "
-
-                    "Nunca invente funcionalidades, arquivos, "
-                    "vulnerabilidades, testes ou comportamentos "
-                    "que não possam ser sustentados pelo diff. "
-
-                    "Responda sempre em português do Brasil. "
-
-                    "Se não houver evidência suficiente para "
-                    "uma conclusão, diga explicitamente "
-                    "que não foi possível determinar."
-                ),
+                "content": SYSTEM_PROMPT
             },
-
             {
                 "role": "user",
-
-                "content": prompt,
-            },
+                "content": prompt
+            }
         ],
-
-        "temperature": 0.2,
-
-        "max_tokens": 1800,
+        "temperature": 0.1,
+        "reasoning_effort": "high",
+        "max_tokens": 5000,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "professional_code_review",
+                "strict": True,
+                "schema": REVIEW_SCHEMA
+            }
+        }
     }
 
-    data = json.dumps(
-        body
-    ).encode()
+    data = json.dumps(body, ensure_ascii=False).encode()
 
     req = urllib.request.Request(
-
         "https://api.groq.com/openai/v1/chat/completions",
-
         data=data,
-
         method="POST",
-
         headers={
-
-            "Authorization":
-                f"Bearer {GROQ_API_KEY}",
-
-            "Content-Type":
-                "application/json",
-
-            # Importante para evitar problemas
-            # com o User-Agent padrão do urllib.
-            "User-Agent":
-                "github-actions-groq-notion/1.0",
-        },
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": "ai-devops/2.0"
+        }
     )
 
+    max_attempts = 4
 
-    # -----------------------------------------------------
-    # Tentativas para erros temporários
-    # -----------------------------------------------------
-
-    max_attempts = 3
-
-
-    for attempt in range(
-        1,
-        max_attempts + 1
-    ):
-
+    for attempt in range(1, max_attempts + 1):
         try:
-
             print(
-                "🤖 Enviando alteração "
-                "para a Groq..."
+                f"🤖 AI DevOps → Groq | modelo={GROQ_MODEL} | "
+                f"tentativa={attempt}/{max_attempts}"
             )
 
-            with urllib.request.urlopen(
-                req,
-                timeout=60
-            ) as response:
-
+            with urllib.request.urlopen(req, timeout=120) as response:
                 result = json.loads(
                     response.read().decode()
                 )
 
-
             content = (
-                result
-                ["choices"]
-                [0]
-                ["message"]
-                ["content"]
+                result["choices"][0]["message"]["content"]
                 .strip()
             )
 
-
             if not content:
-
                 raise RuntimeError(
-                    "A Groq retornou uma "
-                    "resposta vazia."
+                    "A Groq retornou uma resposta vazia."
                 )
 
+            analysis = json.loads(content)
 
-            print(
-                "✅ Análise gerada pela Groq."
-            )
+            print("✅ Review estruturado recebido da Groq.")
 
-
-            # -------------------------------------------------
-            # Remover cercas Markdown caso a IA coloque JSON
-            # dentro de ```json ... ```
-            # -------------------------------------------------
-
-            if content.startswith(
-                "```"
-            ):
-
-                content = content.replace(
-                    "```json",
-                    "",
-                    1
-                )
-
-                content = content.replace(
-                    "```",
-                    "",
-                    1
-                ).strip()
-
-
-            # -------------------------------------------------
-            # Converter resposta para JSON
-            # -------------------------------------------------
-
-            try:
-
-                return json.loads(
-                    content
-                )
-
-
-            except json.JSONDecodeError:
-
-                print(
-                    "⚠️ A Groq não retornou "
-                    "JSON válido."
-                )
-
-                print(
-                    "⚠️ Usando resposta "
-                    "como documentação."
-                )
-
-
-                return {
-
-                    "categoria":
-                        "📝 Alteração",
-
-                    "o_que_foi_alterado":
-                        content,
-
-                    "como_funciona":
-                        "Não foi possível "
-                        "estruturar esta seção.",
-
-                    "impacto":
-                        "Não foi possível "
-                        "determinar automaticamente.",
-
-                    "seguranca":
-                        "Não foi possível "
-                        "realizar uma análise "
-                        "estruturada de segurança.",
-
-                    "testes":
-                        "Revisar e executar "
-                        "os testes existentes "
-                        "relacionados à alteração.",
-
-                    "melhorias":
-                        "Não foi possível gerar "
-                        "sugestões estruturadas.",
-
-                    "qualidade":
-                        0,
-
-                    "seguranca_nota":
-                        0,
-
-                    "manutenibilidade":
-                        0,
-
-                    "risco":
-                        "Não determinado",
-
-                    "arquivos_principais":
-                        [],
-                }
-
+            return analysis
 
         except urllib.error.HTTPError as error:
-
-            details = error.read().decode(
-                errors="replace"
-            )
-
-
-            # -------------------------------------------------
-            # Erros temporários
-            # -------------------------------------------------
+            details = error.read().decode(errors="replace")
 
             if error.code in (
-                429,
-                500,
-                502,
-                503,
-                504
+                429, 500, 502, 503, 504
             ) and attempt < max_attempts:
-
                 print(
-                    f"⚠️ Groq retornou "
-                    f"{error.code}."
+                    f"⚠️ Groq retornou HTTP {error.code}. "
+                    "Tentando novamente..."
                 )
-
-                print(
-                    "⏳ Tentando novamente..."
-                )
-
-                time.sleep(
-                    attempt * 3
-                )
-
+                time.sleep(attempt * 4)
                 continue
 
+            raise RuntimeError(
+                f"Groq API {error.code}: {details}"
+            )
+
+        except (
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+            RuntimeError
+        ) as error:
+            if attempt < max_attempts:
+                print(
+                    f"⚠️ Resposta inválida da Groq: {error}. "
+                    "Tentando novamente..."
+                )
+                time.sleep(attempt * 2)
+                continue
 
             raise RuntimeError(
-                f"Groq API {error.code}: "
-                f"{details}"
+                f"Falha ao obter review estruturado: {error}"
             )
 
 
@@ -717,205 +836,75 @@ for prefix, label in [
 
 
 # =========================================================
-# PROMPT DA IA
+# CONTEXTO ENVIADO À IA
 # =========================================================
 
 prompt = f"""
+Faça uma revisão profissional e baseada em evidências do commit abaixo.
 
-Analise o commit abaixo como um
-code reviewer e documentador técnico.
+IMPORTANTE:
+- O diff é a fonte primária da análise.
+- O contexto do projeto serve apenas para compreender a arquitetura e o
+  propósito da alteração.
+- Não assuma que arquivos não mostrados foram alterados.
+- Não invente resultados de execução.
+- Não confunda hipótese com problema confirmado.
+- Não considere {{ e }} dentro de uma f-string Python um erro por si só.
 
-Projeto:
+PROJETO:
 {PROJECT}
 
-Repositório:
+REPOSITÓRIO:
 {REPO}
 
-Commit:
+EVENTO:
+{EVENT_NAME}
+
+COMMIT:
 {SHA}
 
-Autor:
+AUTOR:
 {AUTHOR}
 
-Data:
+DATA:
 {DATE}
 
-
-Mensagem do commit:
+MENSAGEM:
 {MESSAGE}
 
-
 ESTATÍSTICAS:
+Arquivos alterados: {len(files)}
+Linhas adicionadas: {added}
+Linhas removidas: {deleted}
 
-Arquivos alterados:
-{len(files)}
-
-Linhas adicionadas:
-{added}
-
-Linhas removidas:
-{deleted}
-
-
-ARQUIVOS:
-
+ARQUIVOS ALTERADOS:
 {chr(10).join(
     f"- {status}: {path}"
-    for status, path in files[:70]
+    for status, path in files[:100]
 )}
 
+CONTEXTO DO PROJETO:
+{PROJECT_CONTEXT}
 
 DIFF:
-
 {diff}
 
+REGRAS DE DECISÃO:
 
-==================================================
-OBJETIVO
-==================================================
-
-Analise a alteração tecnicamente.
-
-A resposta DEVE ser um JSON válido.
-
-Não utilize Markdown.
-
-Não escreva nenhuma explicação
-fora do JSON.
-
-
-==================================================
-ESTRUTURA OBRIGATÓRIA
-==================================================
-
-{{
-    "categoria":
-        "✨ Feature",
-
-    "o_que_foi_alterado":
-        "explicação objetiva da alteração",
-
-    "como_funciona":
-        "explicação técnica do funcionamento",
-
-    "impacto":
-        "impactos técnicos relevantes",
-
-    "seguranca":
-        "análise de segurança baseada somente no diff",
-
-    "testes":
-        "testes recomendados ou que possam ser inferidos",
-
-    "melhorias":
-        "sugestões de melhoria",
-
-    "problemas_encontrados":
-        [
-            {{
-                "severidade": "Baixa",
-                "problema": "descrição objetiva ou nenhum problema evidente",
-                "arquivo": "arquivo relacionado ou N/A",
-                "sugestao": "ação recomendada ou N/A"
-            }}
-        ],
-
-    "qualidade":
-        8.0,
-
-    "seguranca_nota":
-        8.0,
-
-    "manutenibilidade":
-        8.0,
-
-    "risco":
-        "Baixo",
-
-    "arquivos_principais":
-        [
-            "arquivo: papel na alteração"
-        ]
-}}
-
-
-==================================================
-CATEGORIAS PERMITIDAS
-==================================================
-
-✨ Feature
-
-🐛 Correção
-
-📚 Documentação
-
-♻️ Refatoração
-
-🧪 Teste
-
-🔐 Segurança
-
-⚡ Performance
-
-🔧 Manutenção
-
-📝 Alteração
-
-
-==================================================
-REGRAS
-==================================================
-
-1. Não invente funcionalidades.
-
-2. Não invente vulnerabilidades.
-
-3. Não invente testes executados.
-
-4. Não diga que algo é seguro apenas
-   porque não encontrou problemas.
-
-5. Para segurança, diferencie:
-
-   "Nenhum problema evidente no diff"
-
-   de:
-
-   "Segurança garantida".
-
-6. Se não houver informação suficiente,
-   informe isso.
-
-7. As notas são OBRIGATÓRIAS e devem ser números JSON entre 0 e 10.
-   Nunca use strings como "8/10"; use apenas 8 ou 8.5.
-
-8. Dê notas coerentes com o diff:
-   - qualidade: clareza e qualidade da implementação;
-   - seguranca_nota: segurança observável na alteração;
-   - manutenibilidade: facilidade de manter a alteração.
-   Não use 0 apenas porque a nota não foi informada.
-
-9. "problemas_encontrados" é OBRIGATÓRIO.
-   Se não houver problema evidente, retorne uma lista com um item
-   dizendo "Nenhum problema evidente no diff", sem inventar problemas.
-
-10. Cada problema deve ter:
-   severidade, problema, arquivo e sugestao.
-
-11. O risco deve ser:
-
-   Baixo
-
-   Médio
-
-   Alto
-
-9. Seja técnico e objetivo.
-
-10. Não inclua o diff inteiro na resposta.
-
+1. Primeiro entenda o que mudou.
+2. Depois determine o efeito técnico.
+3. Depois procure problemas concretos.
+4. Para cada problema, exija evidência.
+5. Se não houver evidência suficiente, não reporte o problema como fato.
+6. Se não houver problemas, declare isso explicitamente.
+7. Avalie segurança somente com base no que pode ser sustentado.
+8. Recomendações devem ser acionáveis e relacionadas à alteração.
+9. As notas devem ser coerentes e independentes entre si.
+10. A confiança deve refletir a quantidade e qualidade das evidências.
+11. Não use linguagem sensacionalista.
+12. Não inclua o diff inteiro na resposta.
+13. Retorne somente o objeto definido pelo JSON Schema.
 """
-
 
 # =========================================================
 # ANALISAR COM GROQ
@@ -927,184 +916,199 @@ analysis = groq(
 
 
 # =========================================================
-# PROCESSAR RESPOSTA DA IA
+# VALIDAR E NORMALIZAR REVIEW
 # =========================================================
 
-if not isinstance(
-    analysis,
-    dict
-):
-
-    analysis = {}
-
-
-allowed_kinds = {
-
+ALLOWED_KINDS = {
     "✨ Feature",
-
     "🐛 Correção",
-
     "📚 Documentação",
-
     "♻️ Refatoração",
-
     "🧪 Teste",
-
     "🔐 Segurança",
-
     "⚡ Performance",
-
     "🔧 Manutenção",
-
     "📝 Alteração",
-
 }
 
+ALLOWED_RISK = {"Baixo", "Médio", "Alto"}
+ALLOWED_SEVERITY = {"Baixa", "Média", "Alta"}
 
-ai_kind = str(
 
-    analysis.get(
-        "categoria",
-        ""
+def clamp_score(value):
+    try:
+        return max(0.0, min(10.0, float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def clamp_confidence(value):
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def normalize_review(data):
+    if not isinstance(data, dict):
+        raise RuntimeError("A IA não retornou um objeto de review.")
+
+    if data.get("categoria") not in ALLOWED_KINDS:
+        data["categoria"] = "📝 Alteração"
+
+    if data.get("risco") not in ALLOWED_RISK:
+        data["risco"] = "Médio"
+
+    for field in (
+        "qualidade",
+        "seguranca_nota",
+        "manutenibilidade"
+    ):
+        score_value = clamp_score(data.get(field))
+
+        if score_value is None:
+            raise RuntimeError(
+                f"Nota inválida ou ausente: {field}"
+            )
+
+        data[field] = score_value
+
+    data["confianca_geral"] = clamp_confidence(
+        data.get("confianca_geral")
     )
 
-).strip()
+    problems = data.get("problemas_encontrados")
 
+    if not isinstance(problems, list):
+        problems = []
 
-if ai_kind in allowed_kinds:
+    normalized_problems = []
 
-    kind = ai_kind
+    for problem in problems[:20]:
+        if not isinstance(problem, dict):
+            continue
 
+        severity = problem.get("severidade")
 
-# =========================================================
-# RESULTADOS DA IA
-# =========================================================
+        if severity not in ALLOWED_SEVERITY:
+            severity = "Baixa"
 
-what_changed = str(
+        confidence = clamp_confidence(
+            problem.get("confianca")
+        )
 
-    analysis.get(
+        normalized_problems.append({
+            "severidade": severity,
+            "problema": str(
+                problem.get(
+                    "problema",
+                    "Problema não especificado."
+                )
+            ),
+            "arquivo": str(
+                problem.get("arquivo", "N/A")
+            ),
+            "linha": str(
+                problem.get("linha", "N/A")
+            ),
+            "evidencia": str(
+                problem.get(
+                    "evidencia",
+                    "Evidência não especificada."
+                )
+            ),
+            "sugestao": str(
+                problem.get(
+                    "sugestao",
+                    "Nenhuma sugestão específica."
+                )
+            ),
+            "confianca": confidence
+        })
 
-        "o_que_foi_alterado",
-
-        "Não foi possível "
-        "gerar o resumo."
-    )
-)
-
-
-how_it_works = str(
-
-    analysis.get(
-
-        "como_funciona",
-
-        "Não foi possível "
-        "determinar o funcionamento."
-    )
-)
-
-
-impact = str(
-
-    analysis.get(
-
-        "impacto",
-
-        "Não foi possível "
-        "determinar o impacto."
-    )
-)
-
-
-security = str(
-
-    analysis.get(
-
-        "seguranca",
-
-        "Não foi possível "
-        "realizar a análise."
-    )
-)
-
-
-tests = str(
-
-    analysis.get(
-
-        "testes",
-
-        "Não foram identificados "
-        "testes específicos."
-    )
-)
-
-
-improvements = str(
-
-    analysis.get(
-
-        "melhorias",
-
-        "Nenhuma melhoria específica "
-        "foi identificada."
-    )
-)
-
-
-risk = str(
-
-    analysis.get(
-
-        "risco",
-
-        "Não determinado"
-    )
-)
-
-
-main_files = clean_list(
-
-    analysis.get(
-
-        "arquivos_principais",
-
-        []
-    )
-)
-
-problems = analysis.get(
-    "problemas_encontrados",
-    []
-)
-
-if not isinstance(problems, list):
-    problems = []
-
-# Garante que sempre exista uma seção de problemas.
-if not problems:
-    problems = [
-        {
+    if not normalized_problems:
+        normalized_problems = [{
             "severidade": "Baixa",
             "problema": "Nenhum problema evidente no diff.",
             "arquivo": "N/A",
-            "sugestao": "Nenhuma ação corretiva identificada."
-        }
-    ]
+            "linha": "N/A",
+            "evidencia": (
+                "O diff não apresentou evidência suficiente "
+                "para registrar um problema."
+            ),
+            "sugestao": "Nenhuma ação corretiva necessária.",
+            "confianca": data["confianca_geral"]
+        }]
 
-quality = score(
-    analysis.get("qualidade"),
-    fallback=None
+    data["problemas_encontrados"] = normalized_problems
+
+    return data
+
+
+# =========================================================
+# PROCESSAR RESPOSTA DA IA
+# =========================================================
+
+analysis = normalize_review(
+    groq(prompt)
 )
 
-security_score = score(
-    analysis.get("seguranca_nota"),
-    fallback=None
+kind = analysis["categoria"]
+
+summary = str(
+    analysis["resumo_executivo"]
 )
 
-maintainability = score(
-    analysis.get("manutenibilidade"),
-    fallback=None
+what_changed = str(
+    analysis["o_que_foi_alterado"]
+)
+
+how_it_works = str(
+    analysis["como_funciona"]
+)
+
+impact = str(
+    analysis["impacto"]
+)
+
+strengths = clean_list(
+    analysis["pontos_fortes"]
+)
+
+compatibility = str(
+    analysis["compatibilidade"]
+)
+
+regression = str(
+    analysis["regressao"]
+)
+
+performance = str(
+    analysis["performance"]
+)
+
+security = str(
+    analysis["seguranca"]
+)
+
+tests = str(
+    analysis["testes"]
+)
+
+improvements = str(
+    analysis["melhorias"]
+)
+
+quality = analysis["qualidade"]
+security_score = analysis["seguranca_nota"]
+maintainability = analysis["manutenibilidade"]
+risk = analysis["risco"]
+confidence = analysis["confianca_geral"]
+
+problems = analysis["problemas_encontrados"]
+
+main_files = clean_list(
+    analysis["arquivos_principais"]
 )
 
 
@@ -1112,255 +1116,121 @@ maintainability = score(
 # BUSCAR PROJETO NO NOTION
 # =========================================================
 
-query = notion(
 
-    "POST",
 
-    f"data_sources/{DATA_SOURCE}/query",
+page_id = None
 
-    {
-
-        "filter": {
-
-            "property":
-                "Repositorio",
-
-            "url": {
-
-                "equals":
-                    REPO_URL
-            }
+if NOTION_ENABLED:
+    query = notion(
+        "POST",
+        f"data_sources/{DATA_SOURCE}/query",
+        {
+            "filter": {
+                "property": "Repositorio",
+                "url": {
+                    "equals": REPO_URL
+                }
+            },
+            "page_size": 1,
         },
-
-        "page_size":
-            1,
-    },
-)
-
-
-page_id = (
-
-    query["results"][0]["id"]
-
-    if query.get(
-        "results"
     )
 
-    else None
-)
+    page_id = (
+        query["results"][0]["id"]
+        if query.get("results")
+        else None
+    )
 
 
 # =========================================================
 # CRIAR CONTEÚDO DA DOCUMENTAÇÃO
 # =========================================================
 
-children = [
 
+
+children = [
     {
         "object": "block",
-
         "type": "divider",
-
         "divider": {},
     },
-
-
-    heading(
-        2,
-        f"📌 {kind}"
-    ),
-
-
+    heading(2, f"📌 {kind}"),
+    paragraph(MESSAGE.strip() or "(sem mensagem)"),
     paragraph(
-        MESSAGE.strip()
-        or "(sem mensagem)"
+        f"👤 Autor: {AUTHOR} | 📅 Data: {DATE}"
     ),
-
-
-    paragraph(
-        f"👤 Autor: {AUTHOR}"
-        f" | 📅 Data: {DATE}"
-    ),
-
-
-    paragraph(
-        f"🔗 Commit: {SHA[:7]}"
-    ),
-
-
-    heading(
-        3,
-        "🤖 Análise e documentação da IA"
-    ),
-
-
-    heading(
-        3,
-        "📌 O que foi alterado"
-    ),
-
-    paragraph(
-        what_changed
-    ),
-
-
-    heading(
-        3,
-        "⚙️ Como funciona"
-    ),
-
-    paragraph(
-        how_it_works
-    ),
-
-
-    heading(
-        3,
-        "📈 Impacto"
-    ),
-
-    paragraph(
-        impact
-    ),
-
-
-    heading(
-        3,
-        "🔐 Segurança"
-    ),
-
-    paragraph(
-        security
-    ),
-
-
-    heading(
-        3,
-        "🧪 Testes recomendados"
-    ),
-
-    paragraph(
-        tests
-    ),
-
-
-    heading(
-        3,
-        "💡 Melhorias sugeridas"
-    ),
-
-    paragraph(
-        improvements
-    ),
-
-
-    heading(
-        3,
-        "🚨 Problemas encontrados"
-    ),
+    paragraph(f"🔗 Commit: {SHA[:7]}"),
+    heading(3, "🧠 Resumo executivo"),
+    paragraph(summary),
+    heading(3, "📌 O que foi alterado"),
+    paragraph(what_changed),
+    heading(3, "⚙️ Como funciona"),
+    paragraph(how_it_works),
+    heading(3, "📈 Impacto"),
+    paragraph(impact),
+    heading(3, "💪 Pontos fortes"),
+    *[
+        bullet(item)
+        for item in strengths[:10]
+    ],
+    heading(3, "🔗 Compatibilidade"),
+    paragraph(compatibility),
+    heading(3, "♻️ Risco de regressão"),
+    paragraph(regression),
+    heading(3, "⚡ Performance"),
+    paragraph(performance),
+    heading(3, "🔐 Segurança"),
+    paragraph(security),
+    heading(3, "🧪 Testes"),
+    paragraph(tests),
+    heading(3, "💡 Melhorias sugeridas"),
+    paragraph(improvements),
+    heading(3, "🚨 Problemas encontrados"),
 ]
-
 
 # =========================================================
 # PROBLEMAS ENCONTRADOS
 # =========================================================
 
 for problem in problems[:20]:
-
-    if isinstance(problem, dict):
-
-        severity = str(
-            problem.get(
-                "severidade",
-                "Não determinada"
-            )
+    children.append(
+        bullet(
+            f"🚨 {problem['severidade']}: "
+            f"{problem['problema']}"
         )
+    )
 
-        problem_text = str(
-            problem.get(
-                "problema",
-                "Problema não especificado."
-            )
+    children.append(
+        bullet(
+            f"📁 {problem['arquivo']} | "
+            f"📍 Linha: {problem['linha']} | "
+            f"🔎 Evidência: {problem['evidencia']}"
         )
+    )
 
-        file_name = str(
-            problem.get(
-                "arquivo",
-                "N/A"
-            )
+    children.append(
+        bullet(
+            f"💡 Sugestão: {problem['sugestao']} | "
+            f"🎯 Confiança: {problem['confianca'] * 100:.0f}%"
         )
-
-        suggestion = str(
-            problem.get(
-                "sugestao",
-                "N/A"
-            )
-        )
-
-        children.append(
-            bullet(
-                f"🚨 {severity}: {problem_text}"
-            )
-        )
-
-        children.append(
-            bullet(
-                f"📁 Arquivo: {file_name} | 💡 Sugestão: {suggestion}"
-            )
-        )
-
-    else:
-
-        children.append(
-            bullet(
-                str(problem)
-            )
-        )
-
+    )
 
 children.extend([
-
-    heading(
-        3,
-        "📊 Avaliação automática"
-    ),
-
-    bullet(
-        f"⭐ Qualidade: "
-        f"{quality:.1f}/10"
-        if quality is not None
-        else "⭐ Qualidade: N/A"
-    ),
-
-    bullet(
-        f"🔐 Segurança: "
-        f"{security_score:.1f}/10"
-        if security_score is not None
-        else "🔐 Segurança: N/A"
-    ),
-
-    bullet(
-        f"🛠️ Manutenibilidade: "
-        f"{maintainability:.1f}/10"
-        if maintainability is not None
-        else "🛠️ Manutenibilidade: N/A"
-    ),
-
-    bullet(
-        f"⚠️ Risco: "
-        f"{risk}"
-    ),
-
-    heading(
-        3,
-        "📁 Arquivos principais"
-    ),
+    heading(3, "📊 Avaliação automática"),
+    bullet(f"⭐ Qualidade: {quality:.1f}/10"),
+    bullet(f"🔐 Segurança: {security_score:.1f}/10"),
+    bullet(f"🛠️ Manutenibilidade: {maintainability:.1f}/10"),
+    bullet(f"⚠️ Risco: {risk}"),
+    bullet(f"🎯 Confiança geral: {confidence * 100:.0f}%"),
+    heading(3, "📁 Arquivos principais"),
 ])
 
 
 # =========================================================
 # ARQUIVOS PRINCIPAIS
 # =========================================================
+
+
 
 if main_files:
 
@@ -1448,176 +1318,104 @@ children.extend([
 
 
 # =========================================================
-# CRIAR PROJETO NO NOTION
+# SINCRONIZAR COM NOTION
 # =========================================================
 
-if not page_id:
-
-    page = notion(
-
-        "POST",
-
-        "pages",
-
-        {
-
-            "parent": {
-
-                "data_source_id":
-                    DATA_SOURCE
-            },
-
-
-            "properties": {
-
-                "Projeto": {
-
-                    "title": [
-
-                        {
-
-                            "text": {
-
-                                "content":
-                                    PROJECT
+if NOTION_ENABLED:
+    if not page_id:
+        page = notion(
+            "POST",
+            "pages",
+            {
+                "parent": {
+                    "data_source_id": DATA_SOURCE
+                },
+                "properties": {
+                    "Projeto": {
+                        "title": [
+                            {
+                                "text": {
+                                    "content": PROJECT
+                                }
                             }
+                        ]
+                    },
+                    "Repositorio": {
+                        "url": REPO_URL
+                    },
+                    "Status": {
+                        "select": {
+                            "name": "Ativo"
                         }
-                    ]
-                },
-
-
-                "Repositorio": {
-
-                    "url":
-                        REPO_URL
-                },
-
-
-                "Status": {
-
-                    "select": {
-
-                        "name":
-                            "Ativo"
-                    }
-                },
-
-
-                "Ultimo commit": {
-
-                    "rich_text": [
-
-                        {
-
-                            "text": {
-
-                                "content":
-                                    SHA
+                    },
+                    "Ultimo commit": {
+                        "rich_text": [
+                            {
+                                "text": {
+                                    "content": SHA
+                                }
                             }
+                        ]
+                    },
+                    "Ultima atualizacao": {
+                        "date": {
+                            "start": DATE
                         }
-                    ]
+                    },
                 },
-
-
-                "Ultima atualizacao": {
-
-                    "date": {
-
-                        "start":
-                            DATE
-                    }
-                },
+                "children": children[:100],
             },
-
-
-            "children":
-                children[:100],
-        },
-    )
-
-
-    print(
-        f"✅ Projeto '{PROJECT}' "
-        "criado no Notion."
-    )
-
-
-    print(
-        page.get(
-            "url",
-            ""
         )
-    )
 
+        print(
+            f"✅ Projeto '{PROJECT}' criado no Notion."
+        )
+        print(page.get("url", ""))
 
-# =========================================================
-# ATUALIZAR PROJETO EXISTENTE
-# =========================================================
-
-else:
-
-    notion(
-
-        "PATCH",
-
-        f"pages/{page_id}",
-
-        {
-
-            "properties": {
-
-                "Ultimo commit": {
-
-                    "rich_text": [
-
-                        {
-
-                            "text": {
-
-                                "content":
-                                    SHA
+    else:
+        notion(
+            "PATCH",
+            f"pages/{page_id}",
+            {
+                "properties": {
+                    "Ultimo commit": {
+                        "rich_text": [
+                            {
+                                "text": {
+                                    "content": SHA
+                                }
                             }
+                        ]
+                    },
+                    "Ultima atualizacao": {
+                        "date": {
+                            "start": DATE
                         }
-                    ]
-                },
+                    },
+                }
+            },
+        )
 
+        notion(
+            "PATCH",
+            f"blocks/{page_id}/children",
+            {
+                "children": children[:100]
+            },
+        )
 
-                "Ultima atualizacao": {
-
-                    "date": {
-
-                        "start":
-                            DATE
-                    }
-                },
-            }
-        },
-    )
-
-
-    notion(
-
-        "PATCH",
-
-        f"blocks/{page_id}/children",
-
-        {
-
-            "children":
-                children[:100]
-        },
-    )
-
-
-    print(
-        f"✅ Projeto '{PROJECT}' "
-        "atualizado no Notion."
-    )
+        print(
+            f"✅ Projeto '{PROJECT}' atualizado no Notion."
+        )
+else:
+    print("ℹ️ Notion desativado — review mantido no GitHub Actions.")
 
 
 # =========================================================
 # RESUMO FINAL DO GITHUB ACTIONS
 # =========================================================
+
+
 
 print(
     f"📦 {len(files)} arquivos | "
@@ -1658,6 +1456,91 @@ print(
 print(
     f"🔗 {COMMIT_URL}"
 )
+
+
+print(
+    f"📦 {len(files)} arquivos | "
+    f"➕ {added} linhas | "
+    f"➖ {deleted} linhas"
+)
+
+print(f"⭐ Qualidade: {quality:.1f}/10")
+print(f"🔐 Segurança: {security_score:.1f}/10")
+print(f"🛠️ Manutenibilidade: {maintainability:.1f}/10")
+print(f"⚠️ Risco: {risk}")
+print(f"🎯 Confiança: {confidence * 100:.0f}%")
+print(f"🔗 {COMMIT_URL}")
+
+
+# =========================================================
+# QUALITY GATE
+# =========================================================
+
+high_risk = risk == "Alto"
+low_score = min(
+    quality,
+    security_score,
+    maintainability
+) < MIN_SCORE if MIN_SCORE > 0 else False
+
+if high_risk and FAIL_ON_HIGH_RISK:
+    print(
+        "❌ QUALITY GATE: risco Alto detectado."
+    )
+    raise SystemExit(2)
+
+if low_score:
+    print(
+        f"❌ QUALITY GATE: nota abaixo do mínimo "
+        f"configurado ({MIN_SCORE:.1f})."
+    )
+    raise SystemExit(2)
+
+print("✅ AI DevOps review concluído com sucesso.")
+
+
+
+# =========================================================
+# GITHUB STEP SUMMARY
+# =========================================================
+
+summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+if summary_path:
+    summary_lines = [
+        f"# 🤖 AI DevOps Review",
+        "",
+        f"**Projeto:** {PROJECT}",
+        f"**Commit:** [{SHA[:7]}]({COMMIT_URL})",
+        "",
+        f"## 📊 Avaliação",
+        f"- ⭐ Qualidade: **{quality:.1f}/10**",
+        f"- 🔐 Segurança: **{security_score:.1f}/10**",
+        f"- 🛠️ Manutenibilidade: **{maintainability:.1f}/10**",
+        f"- ⚠️ Risco: **{risk}**",
+        f"- 🎯 Confiança: **{confidence * 100:.0f}%**",
+        "",
+        "## 🧠 Resumo",
+        summary,
+        "",
+        "## 🚨 Problemas"
+    ]
+
+    for problem in problems[:20]:
+        summary_lines.append(
+            f"- **{problem['severidade']}** — "
+            f"{problem['problema']} "
+            f"({problem['arquivo']}:{problem['linha']})"
+        )
+
+    with open(
+        summary_path,
+        "a",
+        encoding="utf-8"
+    ) as summary_file:
+        summary_file.write(
+            "\n".join(summary_lines) + "\n"
+        )
 
 
 # ============================================================
