@@ -134,7 +134,7 @@ def project_context():
 
     context = "\n\n".join(sections)
 
-    return context[:8000]
+    return context[:4000]
 
 
 PROJECT_CONTEXT = project_context()
@@ -414,7 +414,7 @@ def groq(prompt):
         ],
         "temperature": 0.1,
         "reasoning_effort": "medium",
-        "max_tokens": 1800,
+        "max_tokens": 2400,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -785,7 +785,7 @@ except subprocess.CalledProcessError:
 
 # Evita enviar diffs gigantes para a IA.
 
-MAX_DIFF = 12000
+MAX_DIFF = 8000
 
 
 if len(diff) > MAX_DIFF:
