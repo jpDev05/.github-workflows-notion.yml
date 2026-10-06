@@ -100,3 +100,43 @@ Future providers can implement the same normalized review contract:
 - findings.
 
 This keeps the GitHub publishing layer independent from a specific model.
+
+## Security plane
+
+Security is deliberately layered:
+
+    AI review
+        +
+    deterministic high-signal scanner
+        +
+    CodeQL
+        +
+    dependency update automation
+        =
+    defense in depth
+
+AI findings are advisory unless a configured quality gate is enabled.
+Deterministic scanners remain independent from the model.
+
+## Test plane
+
+Test Intelligence detects common project ecosystems and runs tests only in
+push/manual automation by default. This prevents the PR review action from
+requiring privileged credentials to execute arbitrary pull request code.
+
+## Evaluation plane
+
+Every important AI behavior should have a fixture:
+
+    fixture
+       |
+       v
+    model review
+       |
+       v
+    normalized output
+       |
+       v
+    expected behavior
+
+This creates a path toward measurable false-positive and false-negative rates.
