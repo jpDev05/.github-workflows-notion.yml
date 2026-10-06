@@ -91,7 +91,7 @@ jobs:
           fetch-depth: 0
 
       - name: AI DevOps Review
-        uses: jpDev05/.github-workflows-notion.yml@v1
+        uses: jpDev05/.github-workflows-notion.yml@v2
         with:
           groq-api-key: ${{ secrets.GROQ_API_KEY }}
           notion-token: ${{ secrets.NOTION_TOKEN }}
@@ -152,7 +152,7 @@ You can optionally fail the workflow when quality falls below a threshold:
 
 ```yaml
 - name: AI DevOps Review
-  uses: jpDev05/.github-workflows-notion.yml@v1
+  uses: jpDev05/.github-workflows-notion.yml@v2
   with:
     groq-api-key: ${{ secrets.GROQ_API_KEY }}
     notion-token: ${{ secrets.NOTION_TOKEN }}
@@ -194,7 +194,7 @@ Example:
 ```yaml
 - name: AI DevOps Review
   id: review
-  uses: jpDev05/.github-workflows-notion.yml@v1
+  uses: jpDev05/.github-workflows-notion.yml@v2
   with:
     groq-api-key: ${{ secrets.GROQ_API_KEY }}
     notion-enabled: "false"
