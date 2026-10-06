@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import subprocess
 import urllib.request
@@ -483,29 +484,36 @@ def clean_list(
 
 
 def score(
-    value
+    value,
+    fallback=None
 ):
 
+    # Aceita números, "8.5/10", "8,5/10" e textos
+    # que contenham uma nota entre 0 e 10.
+    if isinstance(value, bool):
+        return fallback
+
     try:
+        number = float(value)
+        return max(0.0, min(10.0, number))
+    except (TypeError, ValueError):
+        pass
 
-        number = float(
-            value
+    if value is not None:
+        text_value = str(value).strip().replace(",", ".")
+        match = re.search(
+            r"(?<!\\d)(10(?:\\.0+)?|[0-9](?:\\.[0-9]+)?)(?:\\s*/\\s*10)?",
+            text_value
         )
 
-        return max(
-            0,
-            min(
-                10,
-                number
-            )
-        )
+        if match:
+            try:
+                number = float(match.group(1))
+                return max(0.0, min(10.0, number))
+            except ValueError:
+                pass
 
-    except (
-        TypeError,
-        ValueError
-    ):
-
-        return 0
+    return fallback
 
 
 # =========================================================
@@ -802,14 +810,24 @@ ESTRUTURA OBRIGATÓRIA
     "melhorias":
         "sugestões de melhoria",
 
+    "problemas_encontrados":
+        [
+            {
+                "severidade": "Baixa",
+                "problema": "descrição objetiva ou nenhum problema evidente",
+                "arquivo": "arquivo relacionado ou N/A",
+                "sugestao": "ação recomendada ou N/A"
+            }
+        ],
+
     "qualidade":
-        0,
+        8.0,
 
     "seguranca_nota":
-        0,
+        8.0,
 
     "manutenibilidade":
-        0,
+        8.0,
 
     "risco":
         "Baixo",
@@ -868,9 +886,23 @@ REGRAS
 6. Se não houver informação suficiente,
    informe isso.
 
-7. As notas devem ser números entre 0 e 10.
+7. As notas são OBRIGATÓRIAS e devem ser números JSON entre 0 e 10.
+   Nunca use strings como "8/10"; use apenas 8 ou 8.5.
 
-8. O risco deve ser:
+8. Dê notas coerentes com o diff:
+   - qualidade: clareza e qualidade da implementação;
+   - seguranca_nota: segurança observável na alteração;
+   - manutenibilidade: facilidade de manter a alteração.
+   Não use 0 apenas porque a nota não foi informada.
+
+9. "problemas_encontrados" é OBRIGATÓRIO.
+   Se não houver problema evidente, retorne uma lista com um item
+   dizendo "Nenhum problema evidente no diff", sem inventar problemas.
+
+10. Cada problema deve ter:
+   severidade, problema, arquivo e sugestao.
+
+11. O risco deve ser:
 
    Baixo
 
@@ -1020,30 +1052,6 @@ improvements = str(
 )
 
 
-quality = score(
-
-    analysis.get(
-        "qualidade"
-    )
-)
-
-
-security_score = score(
-
-    analysis.get(
-        "seguranca_nota"
-    )
-)
-
-
-maintainability = score(
-
-    analysis.get(
-        "manutenibilidade"
-    )
-)
-
-
 risk = str(
 
     analysis.get(
@@ -1063,6 +1071,40 @@ main_files = clean_list(
 
         []
     )
+)
+
+problems = analysis.get(
+    "problemas_encontrados",
+    []
+)
+
+if not isinstance(problems, list):
+    problems = []
+
+# Garante que sempre exista uma seção de problemas.
+if not problems:
+    problems = [
+        {
+            "severidade": "Baixa",
+            "problema": "Nenhum problema evidente no diff.",
+            "arquivo": "N/A",
+            "sugestao": "Nenhuma ação corretiva identificada."
+        }
+    ]
+
+quality = score(
+    analysis.get("qualidade"),
+    fallback=None
+)
+
+security_score = score(
+    analysis.get("seguranca_nota"),
+    fallback=None
+)
+
+maintainability = score(
+    analysis.get("manutenibilidade"),
+    fallback=None
 )
 
 
@@ -1214,39 +1256,106 @@ children = [
 
     heading(
         3,
+        "🚨 Problemas encontrados"
+    ),
+]
+
+
+# =========================================================
+# PROBLEMAS ENCONTRADOS
+# =========================================================
+
+for problem in problems[:20]:
+
+    if isinstance(problem, dict):
+
+        severity = str(
+            problem.get(
+                "severidade",
+                "Não determinada"
+            )
+        )
+
+        problem_text = str(
+            problem.get(
+                "problema",
+                "Problema não especificado."
+            )
+        )
+
+        file_name = str(
+            problem.get(
+                "arquivo",
+                "N/A"
+            )
+        )
+
+        suggestion = str(
+            problem.get(
+                "sugestao",
+                "N/A"
+            )
+        )
+
+        children.append(
+            bullet(
+                f"🚨 {severity}: {problem_text}"
+            )
+        )
+
+        children.append(
+            bullet(
+                f"📁 Arquivo: {file_name} | 💡 Sugestão: {suggestion}"
+            )
+        )
+
+    else:
+
+        children.append(
+            bullet(
+                str(problem)
+            )
+        )
+
+
+children.extend([
+
+    heading(
+        3,
         "📊 Avaliação automática"
     ),
-
 
     bullet(
         f"⭐ Qualidade: "
         f"{quality:.1f}/10"
+        if quality is not None
+        else "⭐ Qualidade: N/A"
     ),
-
 
     bullet(
         f"🔐 Segurança: "
         f"{security_score:.1f}/10"
+        if security_score is not None
+        else "🔐 Segurança: N/A"
     ),
-
 
     bullet(
         f"🛠️ Manutenibilidade: "
         f"{maintainability:.1f}/10"
+        if maintainability is not None
+        else "🛠️ Manutenibilidade: N/A"
     ),
-
 
     bullet(
         f"⚠️ Risco: "
         f"{risk}"
     ),
 
-
     heading(
         3,
         "📁 Arquivos principais"
     ),
-]
+])
 
 
 # =========================================================
@@ -1520,18 +1629,24 @@ print(
 print(
     f"⭐ Qualidade: "
     f"{quality:.1f}/10"
+    if quality is not None
+    else "⭐ Qualidade: N/A"
 )
 
 
 print(
     f"🔐 Segurança: "
     f"{security_score:.1f}/10"
+    if security_score is not None
+    else "🔐 Segurança: N/A"
 )
 
 
 print(
     f"🛠️ Manutenibilidade: "
     f"{maintainability:.1f}/10"
+    if maintainability is not None
+    else "🛠️ Manutenibilidade: N/A"
 )
 
 
