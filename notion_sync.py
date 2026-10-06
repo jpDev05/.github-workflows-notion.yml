@@ -3,25 +3,62 @@ import os
 import subprocess
 import urllib.request
 import urllib.error
+import time
+
+
+# =========================================================
+# CONFIGURAÇÕES
+# =========================================================
 
 TOKEN = os.environ["NOTION_TOKEN"]
 GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 
 VERSION = "2025-09-03"
+
 DATA_SOURCE = "d4190e15-cd71-4d55-8706-1ccfeb0227fd"
 
-SHA = os.environ["COMMIT_SHA"]
-BEFORE = os.environ["BEFORE_SHA"]
-MESSAGE = os.environ.get("COMMIT_MESSAGE", "")
-AUTHOR = os.environ.get("COMMIT_AUTHOR", "Desconhecido")
-DATE = os.environ.get("COMMIT_DATE", "")
-REPO = os.environ["REPOSITORY"]
-REPO_URL = os.environ["REPOSITORY_URL"]
-COMMIT_URL = os.environ["COMMIT_URL"]
-PROJECT = REPO.split("/", 1)[1]
 
+# =========================================================
+# INFORMAÇÕES DO GITHUB ACTIONS
+# =========================================================
+
+SHA = os.environ["COMMIT_SHA"]
+
+BEFORE = os.environ["BEFORE_SHA"]
+
+MESSAGE = os.environ.get(
+    "COMMIT_MESSAGE",
+    ""
+)
+
+AUTHOR = os.environ.get(
+    "COMMIT_AUTHOR",
+    "Desconhecido"
+)
+
+DATE = os.environ.get(
+    "COMMIT_DATE",
+    ""
+)
+
+REPO = os.environ["REPOSITORY"]
+
+REPO_URL = os.environ["REPOSITORY_URL"]
+
+COMMIT_URL = os.environ["COMMIT_URL"]
+
+PROJECT = REPO.split(
+    "/",
+    1
+)[1]
+
+
+# =========================================================
+# EXECUTAR COMANDOS GIT
+# =========================================================
 
 def git(*args):
+
     return subprocess.check_output(
         ["git", *args],
         text=True,
@@ -29,108 +66,357 @@ def git(*args):
     ).strip()
 
 
-def notion(method, path, body=None):
-    data = None if body is None else json.dumps(body).encode()
+# =========================================================
+# API DO NOTION
+# =========================================================
+
+def notion(
+    method,
+    path,
+    body=None
+):
+
+    data = (
+        None
+        if body is None
+        else json.dumps(body).encode()
+    )
 
     req = urllib.request.Request(
         f"https://api.notion.com/v1/{path}",
+
         data=data,
+
         method=method,
+
         headers={
             "Authorization": f"Bearer {TOKEN}",
+
             "Notion-Version": VERSION,
+
             "Content-Type": "application/json",
+
+            "User-Agent":
+                "github-actions-groq-notion/1.0",
         },
     )
 
     try:
-        with urllib.request.urlopen(req) as response:
-            return json.loads(response.read().decode())
+
+        with urllib.request.urlopen(
+            req,
+            timeout=30
+        ) as response:
+
+            return json.loads(
+                response.read().decode()
+            )
 
     except urllib.error.HTTPError as error:
+
+        details = error.read().decode(
+            errors="replace"
+        )
+
         raise RuntimeError(
-            f"Notion API {error.code}: "
-            f"{error.read().decode(errors='replace')}"
+            f"Notion API {error.code}: {details}"
         )
 
 
+# =========================================================
+# GROQ
+# =========================================================
+
 def groq(prompt):
+
     body = {
+
         "model": "openai/gpt-oss-20b",
 
         "messages": [
+
             {
                 "role": "system",
+
                 "content": (
-                    "Você é um engenheiro de software responsável por "
-                    "documentar alterações de código. "
+                    "Você é um engenheiro de software "
+                    "sênior, especialista em documentação, "
+                    "code review, segurança e testes. "
+
+                    "Analise SOMENTE o commit e o diff "
+                    "fornecidos. "
+
+                    "Nunca invente funcionalidades, arquivos, "
+                    "vulnerabilidades, testes ou comportamentos "
+                    "que não possam ser sustentados pelo diff. "
+
                     "Responda sempre em português do Brasil. "
-                    "Seja técnico, objetivo e não invente informações "
-                    "que não estejam presentes no diff."
+
+                    "Se não houver evidência suficiente para "
+                    "uma conclusão, diga explicitamente "
+                    "que não foi possível determinar."
                 ),
             },
+
             {
                 "role": "user",
+
                 "content": prompt,
             },
         ],
 
         "temperature": 0.2,
-        "max_tokens": 1200,
+
+        "max_tokens": 1800,
     }
 
-    data = json.dumps(body).encode()
+    data = json.dumps(
+        body
+    ).encode()
 
     req = urllib.request.Request(
+
         "https://api.groq.com/openai/v1/chat/completions",
+
         data=data,
+
         method="POST",
 
         headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json",
 
-            # Evita bloqueios do Cloudflare/Groq
-            # para o User-Agent padrão do urllib.
-            "User-Agent": "github-actions-groq-notion/1.0",
+            "Authorization":
+                f"Bearer {GROQ_API_KEY}",
+
+            "Content-Type":
+                "application/json",
+
+            # Importante para evitar problemas
+            # com o User-Agent padrão do urllib.
+            "User-Agent":
+                "github-actions-groq-notion/1.0",
         },
     )
 
-    try:
-        print("🤖 Enviando alteração para a Groq...")
 
-        with urllib.request.urlopen(req) as response:
-            result = json.loads(response.read().decode())
+    # -----------------------------------------------------
+    # Tentativas para erros temporários
+    # -----------------------------------------------------
 
-        content = result["choices"][0]["message"]["content"].strip()
+    max_attempts = 3
 
-        if not content:
-            raise RuntimeError(
-                "A Groq retornou uma resposta vazia."
+
+    for attempt in range(
+        1,
+        max_attempts + 1
+    ):
+
+        try:
+
+            print(
+                "🤖 Enviando alteração "
+                "para a Groq..."
             )
 
-        print("✅ Documentação gerada pela Groq.")
+            with urllib.request.urlopen(
+                req,
+                timeout=60
+            ) as response:
 
-        return content
-
-    except urllib.error.HTTPError as error:
-        details = error.read().decode(errors="replace")
-
-        raise RuntimeError(
-            f"Groq API {error.code}: {details}"
-        )
+                result = json.loads(
+                    response.read().decode()
+                )
 
 
-def block(kind, content):
+            content = (
+                result
+                ["choices"]
+                [0]
+                ["message"]
+                ["content"]
+                .strip()
+            )
+
+
+            if not content:
+
+                raise RuntimeError(
+                    "A Groq retornou uma "
+                    "resposta vazia."
+                )
+
+
+            print(
+                "✅ Análise gerada pela Groq."
+            )
+
+
+            # -------------------------------------------------
+            # Remover cercas Markdown caso a IA coloque JSON
+            # dentro de ```json ... ```
+            # -------------------------------------------------
+
+            if content.startswith(
+                "```"
+            ):
+
+                content = content.replace(
+                    "```json",
+                    "",
+                    1
+                )
+
+                content = content.replace(
+                    "```",
+                    "",
+                    1
+                ).strip()
+
+
+            # -------------------------------------------------
+            # Converter resposta para JSON
+            # -------------------------------------------------
+
+            try:
+
+                return json.loads(
+                    content
+                )
+
+
+            except json.JSONDecodeError:
+
+                print(
+                    "⚠️ A Groq não retornou "
+                    "JSON válido."
+                )
+
+                print(
+                    "⚠️ Usando resposta "
+                    "como documentação."
+                )
+
+
+                return {
+
+                    "categoria":
+                        "📝 Alteração",
+
+                    "o_que_foi_alterado":
+                        content,
+
+                    "como_funciona":
+                        "Não foi possível "
+                        "estruturar esta seção.",
+
+                    "impacto":
+                        "Não foi possível "
+                        "determinar automaticamente.",
+
+                    "seguranca":
+                        "Não foi possível "
+                        "realizar uma análise "
+                        "estruturada de segurança.",
+
+                    "testes":
+                        "Revisar e executar "
+                        "os testes existentes "
+                        "relacionados à alteração.",
+
+                    "melhorias":
+                        "Não foi possível gerar "
+                        "sugestões estruturadas.",
+
+                    "qualidade":
+                        0,
+
+                    "seguranca_nota":
+                        0,
+
+                    "manutenibilidade":
+                        0,
+
+                    "risco":
+                        "Não determinado",
+
+                    "arquivos_principais":
+                        [],
+                }
+
+
+        except urllib.error.HTTPError as error:
+
+            details = error.read().decode(
+                errors="replace"
+            )
+
+
+            # -------------------------------------------------
+            # Erros temporários
+            # -------------------------------------------------
+
+            if error.code in (
+                429,
+                500,
+                502,
+                503,
+                504
+            ) and attempt < max_attempts:
+
+                print(
+                    f"⚠️ Groq retornou "
+                    f"{error.code}."
+                )
+
+                print(
+                    "⏳ Tentando novamente..."
+                )
+
+                time.sleep(
+                    attempt * 3
+                )
+
+                continue
+
+
+            raise RuntimeError(
+                f"Groq API {error.code}: "
+                f"{details}"
+            )
+
+
+# =========================================================
+# BLOCOS DO NOTION
+# =========================================================
+
+def block(
+    kind,
+    content
+):
+
+    content = str(
+        content
+    )
+
     return {
+
         "object": "block",
+
         "type": kind,
+
         kind: {
+
             "rich_text": [
+
                 {
+
                     "type": "text",
+
                     "text": {
-                        "content": content[:2000]
+
+                        # O Notion limita rich_text
+                        # a 2000 caracteres por bloco.
+                        "content":
+                            content[:2000]
                     }
                 }
             ]
@@ -138,29 +424,101 @@ def block(kind, content):
     }
 
 
-def bullet(content):
+def paragraph(
+    content
+):
+
+    return block(
+        "paragraph",
+        content
+    )
+
+
+def bullet(
+    content
+):
+
     return block(
         "bulleted_list_item",
         content
     )
 
 
-def heading(level, content):
+def heading(
+    level,
+    content
+):
+
     return block(
         f"heading_{level}",
         content
     )
 
 
-# ---------------------------------------------------------
-# Descobrir commit anterior
-# ---------------------------------------------------------
+# =========================================================
+# FUNÇÕES AUXILIARES DA IA
+# =========================================================
+
+def clean_list(
+    value
+):
+
+    if not isinstance(
+        value,
+        list
+    ):
+
+        return []
+
+
+    return [
+
+        str(item).strip()
+
+        for item in value
+
+        if str(item).strip()
+
+    ]
+
+
+def score(
+    value
+):
+
+    try:
+
+        number = float(
+            value
+        )
+
+        return max(
+            0,
+            min(
+                10,
+                number
+            )
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        return 0
+
+
+# =========================================================
+# DESCOBRIR COMMIT ANTERIOR
+# =========================================================
 
 zero = "0" * 40
+
 
 if BEFORE != zero:
 
     try:
+
         git(
             "cat-file",
             "-e",
@@ -169,12 +527,14 @@ if BEFORE != zero:
 
         base = BEFORE
 
+
     except subprocess.CalledProcessError:
 
         base = git(
             "rev-parse",
             f"{SHA}^"
         )
+
 
 else:
 
@@ -184,309 +544,820 @@ else:
     )
 
 
-# ---------------------------------------------------------
-# Informações do commit
-# ---------------------------------------------------------
+# =========================================================
+# ARQUIVOS ALTERADOS
+# =========================================================
 
 raw_files = git(
+
     "diff",
+
     "--name-status",
+
     base,
+
     SHA
 )
 
+
 files = [
-    line.split("\t", 1)
+
+    line.split(
+        "\t",
+        1
+    )
+
     for line in raw_files.splitlines()
+
     if "\t" in line
 ]
 
 
+# =========================================================
+# ESTATÍSTICAS
+# =========================================================
+
 raw_stats = git(
+
     "diff",
+
     "--numstat",
+
     base,
+
     SHA
 )
 
+
 added = 0
+
 deleted = 0
 
 
 for line in raw_stats.splitlines():
 
-    parts = line.split("\t")
+    parts = line.split(
+        "\t"
+    )
+
 
     if len(parts) >= 2:
 
         try:
 
-            added += int(parts[0])
-            deleted += int(parts[1])
+            added += int(
+                parts[0]
+            )
+
+            deleted += int(
+                parts[1]
+            )
 
         except ValueError:
 
             pass
 
 
-# ---------------------------------------------------------
-# Diff do commit
-# ---------------------------------------------------------
+# =========================================================
+# DIFF DO COMMIT
+# =========================================================
 
 try:
 
     diff = git(
+
         "diff",
+
         "--no-ext-diff",
+
         "--unified=3",
+
         base,
+
         SHA
     )
+
 
 except subprocess.CalledProcessError:
 
     diff = ""
 
 
-# Evita mandar diffs gigantes para a IA
+# Evita enviar diffs gigantes para a IA.
 
 MAX_DIFF = 30000
+
 
 if len(diff) > MAX_DIFF:
 
     diff = diff[:MAX_DIFF] + (
-        "\n\n[DIFF TRUNCADO AUTOMATICAMENTE]\n"
+
+        "\n\n"
+        "[DIFF TRUNCADO AUTOMATICAMENTE]"
+        "\n"
     )
 
 
-# ---------------------------------------------------------
-# Tipo do commit
-# ---------------------------------------------------------
+# =========================================================
+# CLASSIFICAÇÃO INICIAL
+# =========================================================
 
 kind = "📝 Alteração"
 
 
 for prefix, label in [
 
-    ("feat:", "✨ Feature"),
-    ("fix:", "🐛 Correção"),
-    ("docs:", "📚 Documentação"),
-    ("refactor:", "♻️ Refatoração"),
-    ("test:", "🧪 Teste"),
-    ("chore:", "🔧 Manutenção"),
+    (
+        "feat:",
+        "✨ Feature"
+    ),
+
+    (
+        "fix:",
+        "🐛 Correção"
+    ),
+
+    (
+        "docs:",
+        "📚 Documentação"
+    ),
+
+    (
+        "refactor:",
+        "♻️ Refatoração"
+    ),
+
+    (
+        "test:",
+        "🧪 Teste"
+    ),
+
+    (
+        "chore:",
+        "🔧 Manutenção"
+    ),
 
 ]:
 
-    if MESSAGE.strip().lower().startswith(prefix):
+    if MESSAGE.strip().lower().startswith(
+        prefix
+    ):
 
         kind = label
+
         break
 
 
-# ---------------------------------------------------------
-# Gerar documentação com Groq
-# ---------------------------------------------------------
+# =========================================================
+# PROMPT DA IA
+# =========================================================
 
 prompt = f"""
-Analise a alteração abaixo e produza uma documentação técnica curta
-para ser registrada no histórico do projeto.
 
-Projeto: {PROJECT}
-Repositório: {REPO}
-Commit: {SHA}
-Autor: {AUTHOR}
-Data: {DATE}
+Analise o commit abaixo como um
+code reviewer e documentador técnico.
+
+Projeto:
+{PROJECT}
+
+Repositório:
+{REPO}
+
+Commit:
+{SHA}
+
+Autor:
+{AUTHOR}
+
+Data:
+{DATE}
+
 
 Mensagem do commit:
 {MESSAGE}
 
-Estatísticas:
 
-- Arquivos alterados: {len(files)}
-- Linhas adicionadas: {added}
-- Linhas removidas: {deleted}
+ESTATÍSTICAS:
 
-Arquivos:
+Arquivos alterados:
+{len(files)}
+
+Linhas adicionadas:
+{added}
+
+Linhas removidas:
+{deleted}
+
+
+ARQUIVOS:
 
 {chr(10).join(
     f"- {status}: {path}"
     for status, path in files[:70]
 )}
 
-Diff:
+
+DIFF:
 
 {diff}
 
-Produza a resposta em português do Brasil.
 
-A documentação deve conter:
+==================================================
+OBJETIVO
+==================================================
 
-### O que foi alterado
+Analise a alteração tecnicamente.
 
-Explique objetivamente a mudança.
+A resposta DEVE ser um JSON válido.
 
-### Como funciona
+Não utilize Markdown.
 
-Explique o comportamento relevante introduzido ou modificado.
+Não escreva nenhuma explicação
+fora do JSON.
 
-### Impacto
 
-Explique possíveis impactos no projeto.
+==================================================
+ESTRUTURA OBRIGATÓRIA
+==================================================
 
-### Arquivos principais
+{{
+    "categoria":
+        "✨ Feature",
 
-Liste os arquivos mais relevantes e explique brevemente o papel deles.
+    "o_que_foi_alterado":
+        "explicação objetiva da alteração",
 
-Não invente funcionalidades.
-Não inclua o diff inteiro.
-Não inclua código desnecessário.
+    "como_funciona":
+        "explicação técnica do funcionamento",
+
+    "impacto":
+        "impactos técnicos relevantes",
+
+    "seguranca":
+        "análise de segurança baseada somente no diff",
+
+    "testes":
+        "testes recomendados ou que possam ser inferidos",
+
+    "melhorias":
+        "sugestões de melhoria",
+
+    "qualidade":
+        0,
+
+    "seguranca_nota":
+        0,
+
+    "manutenibilidade":
+        0,
+
+    "risco":
+        "Baixo",
+
+    "arquivos_principais":
+        [
+            "arquivo: papel na alteração"
+        ]
+}}
+
+
+==================================================
+CATEGORIAS PERMITIDAS
+==================================================
+
+✨ Feature
+
+🐛 Correção
+
+📚 Documentação
+
+♻️ Refatoração
+
+🧪 Teste
+
+🔐 Segurança
+
+⚡ Performance
+
+🔧 Manutenção
+
+📝 Alteração
+
+
+==================================================
+REGRAS
+==================================================
+
+1. Não invente funcionalidades.
+
+2. Não invente vulnerabilidades.
+
+3. Não invente testes executados.
+
+4. Não diga que algo é seguro apenas
+   porque não encontrou problemas.
+
+5. Para segurança, diferencie:
+
+   "Nenhum problema evidente no diff"
+
+   de:
+
+   "Segurança garantida".
+
+6. Se não houver informação suficiente,
+   informe isso.
+
+7. As notas devem ser números entre 0 e 10.
+
+8. O risco deve ser:
+
+   Baixo
+
+   Médio
+
+   Alto
+
+9. Seja técnico e objetivo.
+
+10. Não inclua o diff inteiro na resposta.
+
 """
 
 
-ai_documentation = groq(prompt)
+# =========================================================
+# ANALISAR COM GROQ
+# =========================================================
+
+analysis = groq(
+    prompt
+)
 
 
-# ---------------------------------------------------------
-# Buscar projeto no Notion
-# ---------------------------------------------------------
+# =========================================================
+# PROCESSAR RESPOSTA DA IA
+# =========================================================
+
+if not isinstance(
+    analysis,
+    dict
+):
+
+    analysis = {}
+
+
+allowed_kinds = {
+
+    "✨ Feature",
+
+    "🐛 Correção",
+
+    "📚 Documentação",
+
+    "♻️ Refatoração",
+
+    "🧪 Teste",
+
+    "🔐 Segurança",
+
+    "⚡ Performance",
+
+    "🔧 Manutenção",
+
+    "📝 Alteração",
+
+}
+
+
+ai_kind = str(
+
+    analysis.get(
+        "categoria",
+        ""
+    )
+
+).strip()
+
+
+if ai_kind in allowed_kinds:
+
+    kind = ai_kind
+
+
+# =========================================================
+# RESULTADOS DA IA
+# =========================================================
+
+what_changed = str(
+
+    analysis.get(
+
+        "o_que_foi_alterado",
+
+        "Não foi possível "
+        "gerar o resumo."
+    )
+)
+
+
+how_it_works = str(
+
+    analysis.get(
+
+        "como_funciona",
+
+        "Não foi possível "
+        "determinar o funcionamento."
+    )
+)
+
+
+impact = str(
+
+    analysis.get(
+
+        "impacto",
+
+        "Não foi possível "
+        "determinar o impacto."
+    )
+)
+
+
+security = str(
+
+    analysis.get(
+
+        "seguranca",
+
+        "Não foi possível "
+        "realizar a análise."
+    )
+)
+
+
+tests = str(
+
+    analysis.get(
+
+        "testes",
+
+        "Não foram identificados "
+        "testes específicos."
+    )
+)
+
+
+improvements = str(
+
+    analysis.get(
+
+        "melhorias",
+
+        "Nenhuma melhoria específica "
+        "foi identificada."
+    )
+)
+
+
+quality = score(
+
+    analysis.get(
+        "qualidade"
+    )
+)
+
+
+security_score = score(
+
+    analysis.get(
+        "seguranca_nota"
+    )
+)
+
+
+maintainability = score(
+
+    analysis.get(
+        "manutenibilidade"
+    )
+)
+
+
+risk = str(
+
+    analysis.get(
+
+        "risco",
+
+        "Não determinado"
+    )
+)
+
+
+main_files = clean_list(
+
+    analysis.get(
+
+        "arquivos_principais",
+
+        []
+    )
+)
+
+
+# =========================================================
+# BUSCAR PROJETO NO NOTION
+# =========================================================
 
 query = notion(
+
     "POST",
+
     f"data_sources/{DATA_SOURCE}/query",
+
     {
+
         "filter": {
-            "property": "Repositorio",
+
+            "property":
+                "Repositorio",
+
             "url": {
-                "equals": REPO_URL
+
+                "equals":
+                    REPO_URL
             }
         },
 
-        "page_size": 1,
+        "page_size":
+            1,
     },
 )
 
 
 page_id = (
+
     query["results"][0]["id"]
-    if query.get("results")
+
+    if query.get(
+        "results"
+    )
+
     else None
 )
 
 
-# ---------------------------------------------------------
-# Criar conteúdo do Notion
-# ---------------------------------------------------------
+# =========================================================
+# CRIAR CONTEÚDO DA DOCUMENTAÇÃO
+# =========================================================
 
 children = [
 
     {
         "object": "block",
+
         "type": "divider",
+
         "divider": {},
     },
+
 
     heading(
         2,
         f"📌 {kind}"
     ),
 
-    block(
-        "paragraph",
-        MESSAGE.strip() or "(sem mensagem)"
+
+    paragraph(
+        MESSAGE.strip()
+        or "(sem mensagem)"
     ),
 
-    block(
-        "paragraph",
-        f"👤 Autor: {AUTHOR} | 📅 Data: {DATE}"
+
+    paragraph(
+        f"👤 Autor: {AUTHOR}"
+        f" | 📅 Data: {DATE}"
     ),
 
-    block(
-        "paragraph",
+
+    paragraph(
         f"🔗 Commit: {SHA[:7]}"
     ),
 
-    heading(
-        3,
-        "🤖 Documentação gerada por IA"
-    ),
-
-    block(
-        "paragraph",
-        ai_documentation
-    ),
 
     heading(
         3,
-        "📊 Resumo da alteração"
+        "🤖 Análise e documentação da IA"
     ),
 
-    bullet(
-        f"Arquivos alterados: {len(files)}"
-    ),
-
-    bullet(
-        f"Linhas adicionadas: {added}"
-    ),
-
-    bullet(
-        f"Linhas removidas: {deleted}"
-    ),
 
     heading(
         3,
-        "📁 Arquivos alterados"
+        "📌 O que foi alterado"
+    ),
+
+    paragraph(
+        what_changed
+    ),
+
+
+    heading(
+        3,
+        "⚙️ Como funciona"
+    ),
+
+    paragraph(
+        how_it_works
+    ),
+
+
+    heading(
+        3,
+        "📈 Impacto"
+    ),
+
+    paragraph(
+        impact
+    ),
+
+
+    heading(
+        3,
+        "🔐 Segurança"
+    ),
+
+    paragraph(
+        security
+    ),
+
+
+    heading(
+        3,
+        "🧪 Testes recomendados"
+    ),
+
+    paragraph(
+        tests
+    ),
+
+
+    heading(
+        3,
+        "💡 Melhorias sugeridas"
+    ),
+
+    paragraph(
+        improvements
+    ),
+
+
+    heading(
+        3,
+        "📊 Avaliação automática"
+    ),
+
+
+    bullet(
+        f"⭐ Qualidade: "
+        f"{quality:.1f}/10"
+    ),
+
+
+    bullet(
+        f"🔐 Segurança: "
+        f"{security_score:.1f}/10"
+    ),
+
+
+    bullet(
+        f"🛠️ Manutenibilidade: "
+        f"{maintainability:.1f}/10"
+    ),
+
+
+    bullet(
+        f"⚠️ Risco: "
+        f"{risk}"
+    ),
+
+
+    heading(
+        3,
+        "📁 Arquivos principais"
     ),
 ]
 
 
-for status, path in files[:70]:
+# =========================================================
+# ARQUIVOS PRINCIPAIS
+# =========================================================
 
-    label = {
+if main_files:
 
-        "A": "➕ Adicionado",
-        "M": "✏️ Modificado",
-        "D": "➖ Removido",
-        "R": "🔄 Renomeado",
+    for item in main_files[:20]:
 
-    }.get(
-        status[:1],
-        "📝 Alterado"
-    )
+        children.append(
 
-    children.append(
-        bullet(
-            f"{label}: {path}"
+            bullet(
+                item
+            )
         )
-    )
 
 
-children.append(
+else:
 
-    block(
-        "paragraph",
-        "🤖 Documentação gerada automaticamente "
-        "pelo GitHub Actions utilizando Groq."
-    )
+    for status, path in files[:20]:
 
-)
+        label = {
+
+            "A":
+                "➕ Adicionado",
+
+            "M":
+                "✏️ Modificado",
+
+            "D":
+                "➖ Removido",
+
+            "R":
+                "🔄 Renomeado",
+
+        }.get(
+
+            status[:1],
+
+            "📝 Alterado"
+        )
 
 
-# ---------------------------------------------------------
-# Criar ou atualizar projeto
-# ---------------------------------------------------------
+        children.append(
+
+            bullet(
+
+                f"{label}: {path}"
+            )
+        )
+
+
+# =========================================================
+# RESUMO
+# =========================================================
+
+children.extend([
+
+    heading(
+        3,
+        "📊 Resumo do commit"
+    ),
+
+
+    bullet(
+        f"Arquivos alterados: "
+        f"{len(files)}"
+    ),
+
+
+    bullet(
+        f"Linhas adicionadas: "
+        f"{added}"
+    ),
+
+
+    bullet(
+        f"Linhas removidas: "
+        f"{deleted}"
+    ),
+
+
+    paragraph(
+        "🤖 Análise gerada automaticamente "
+        "pelo GitHub Actions utilizando "
+        "Groq e registrada no Notion."
+    ),
+])
+
+
+# =========================================================
+# CRIAR PROJETO NO NOTION
+# =========================================================
 
 if not page_id:
 
     page = notion(
 
         "POST",
+
         "pages",
 
         {
 
             "parent": {
-                "data_source_id": DATA_SOURCE
+
+                "data_source_id":
+                    DATA_SOURCE
             },
+
 
             "properties": {
 
@@ -495,69 +1366,91 @@ if not page_id:
                     "title": [
 
                         {
+
                             "text": {
-                                "content": PROJECT
+
+                                "content":
+                                    PROJECT
                             }
                         }
-
                     ]
                 },
 
+
                 "Repositorio": {
-                    "url": REPO_URL
+
+                    "url":
+                        REPO_URL
                 },
+
 
                 "Status": {
 
                     "select": {
-                        "name": "Ativo"
-                    }
 
+                        "name":
+                            "Ativo"
+                    }
                 },
+
 
                 "Ultimo commit": {
 
                     "rich_text": [
 
                         {
+
                             "text": {
-                                "content": SHA
+
+                                "content":
+                                    SHA
                             }
                         }
-
                     ]
                 },
+
 
                 "Ultima atualizacao": {
 
                     "date": {
-                        "start": DATE
+
+                        "start":
+                            DATE
                     }
-
                 },
-
             },
 
-            "children": children[:100],
 
+            "children":
+                children[:100],
         },
-
     )
+
 
     print(
-        f"✅ Projeto '{PROJECT}' criado no Notion."
+        f"✅ Projeto '{PROJECT}' "
+        "criado no Notion."
     )
+
 
     print(
-        page.get("url", "")
+        page.get(
+            "url",
+            ""
+        )
     )
 
+
+# =========================================================
+# ATUALIZAR PROJETO EXISTENTE
+# =========================================================
 
 else:
 
     notion(
 
         "PATCH",
+
         f"pages/{page_id}",
 
         {
@@ -569,51 +1462,81 @@ else:
                     "rich_text": [
 
                         {
+
                             "text": {
-                                "content": SHA
+
+                                "content":
+                                    SHA
                             }
                         }
-
                     ]
-
                 },
+
 
                 "Ultima atualizacao": {
 
                     "date": {
-                        "start": DATE
+
+                        "start":
+                            DATE
                     }
-
                 },
-
             }
-
         },
-
     )
 
 
     notion(
 
         "PATCH",
+
         f"blocks/{page_id}/children",
 
         {
-            "children": children[:100]
-        },
 
+            "children":
+                children[:100]
+        },
     )
 
 
     print(
-        f"✅ Projeto '{PROJECT}' atualizado no Notion."
+        f"✅ Projeto '{PROJECT}' "
+        "atualizado no Notion."
     )
 
+
+# =========================================================
+# RESUMO FINAL DO GITHUB ACTIONS
+# =========================================================
 
 print(
     f"📦 {len(files)} arquivos | "
     f"➕ {added} linhas | "
     f"➖ {deleted} linhas"
+)
+
+
+print(
+    f"⭐ Qualidade: "
+    f"{quality:.1f}/10"
+)
+
+
+print(
+    f"🔐 Segurança: "
+    f"{security_score:.1f}/10"
+)
+
+
+print(
+    f"🛠️ Manutenibilidade: "
+    f"{maintainability:.1f}/10"
+)
+
+
+print(
+    f"⚠️ Risco: {risk}"
 )
 
 
