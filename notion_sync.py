@@ -134,7 +134,7 @@ def project_context():
 
     context = "\n\n".join(sections)
 
-    return context[:18000]
+    return context[:8000]
 
 
 PROJECT_CONTEXT = project_context()
@@ -413,8 +413,8 @@ def groq(prompt):
             }
         ],
         "temperature": 0.1,
-        "reasoning_effort": "high",
-        "max_tokens": 5000,
+        "reasoning_effort": "medium",
+        "max_tokens": 1800,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -438,7 +438,7 @@ def groq(prompt):
         }
     )
 
-    max_attempts = 4
+    max_attempts = 3
 
     for attempt in range(1, max_attempts + 1):
         try:
@@ -474,11 +474,24 @@ def groq(prompt):
             if error.code in (
                 429, 500, 502, 503, 504
             ) and attempt < max_attempts:
+                retry_after = error.headers.get(
+                    "retry-after"
+                )
+
+                try:
+                    wait_seconds = max(
+                        5,
+                        int(float(retry_after))
+                    ) + 2
+                except (TypeError, ValueError):
+                    wait_seconds = 22
+
                 print(
                     f"⚠️ Groq retornou HTTP {error.code}. "
-                    "Tentando novamente..."
+                    f"Aguardando {wait_seconds}s conforme o rate limit..."
                 )
-                time.sleep(attempt * 4)
+
+                time.sleep(wait_seconds)
                 continue
 
             raise RuntimeError(
@@ -772,7 +785,7 @@ except subprocess.CalledProcessError:
 
 # Evita enviar diffs gigantes para a IA.
 
-MAX_DIFF = 30000
+MAX_DIFF = 12000
 
 
 if len(diff) > MAX_DIFF:
