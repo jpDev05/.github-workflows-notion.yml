@@ -812,12 +812,12 @@ ESTRUTURA OBRIGATÓRIA
 
     "problemas_encontrados":
         [
-            {
+            {{
                 "severidade": "Baixa",
                 "problema": "descrição objetiva ou nenhum problema evidente",
                 "arquivo": "arquivo relacionado ou N/A",
                 "sugestao": "ação recomendada ou N/A"
-            }
+            }}
         ],
 
     "qualidade":
