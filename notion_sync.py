@@ -1625,4 +1625,5 @@ if summary_path:
 # ============================================================
 # Autor: João Pedro de Oliveira (github.com/jpDev05) - 2026
 # LICENSE: MIT
+# Em caso de dúvidas, abra uma issue no repositório do projeto.
 # ============================================================
