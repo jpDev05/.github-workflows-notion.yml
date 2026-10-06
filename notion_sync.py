@@ -414,7 +414,7 @@ def groq(prompt):
         ],
         "temperature": 0.1,
         "reasoning_effort": "medium",
-        "max_tokens": 2400,
+        "max_tokens": 3000,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
