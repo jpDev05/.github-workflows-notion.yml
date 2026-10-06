@@ -471,6 +471,39 @@ def groq(prompt):
         except urllib.error.HTTPError as error:
             details = error.read().decode(errors="replace")
 
+            # Groq pode rejeitar o JSON estrito mesmo quando
+            # o conteúdo gerado é quase completo. Em 400 json_validate_failed,
+            # aproveitamos failed_generation e completamos os campos localmente.
+            try:
+                error_payload = json.loads(details)
+                error_info = error_payload.get("error", {})
+                failed_generation = error_info.get(
+                    "failed_generation"
+                )
+
+                if (
+                    error.code == 400
+                    and error_info.get("code") == "json_validate_failed"
+                    and isinstance(failed_generation, str)
+                ):
+                    recovered = json.loads(
+                        failed_generation
+                    )
+
+                    print(
+                        "⚠️ Groq gerou JSON quase completo; "
+                        "recuperando e validando localmente."
+                    )
+
+                    return recovered
+
+            except (
+                json.JSONDecodeError,
+                TypeError,
+                ValueError
+            ):
+                pass
+
             if error.code in (
                 429, 500, 502, 503, 504
             ) and attempt < max_attempts:
@@ -966,6 +999,25 @@ def normalize_review(data):
     if not isinstance(data, dict):
         raise RuntimeError("A IA não retornou um objeto de review.")
 
+    defaults = {
+        "resumo_executivo": "Não foi possível gerar um resumo executivo.",
+        "o_que_foi_alterado": "Não foi possível determinar.",
+        "como_funciona": "Não foi possível determinar.",
+        "impacto": "Não foi possível determinar.",
+        "pontos_fortes": [],
+        "compatibilidade": "Não foi possível determinar.",
+        "regressao": "Não foi possível determinar.",
+        "performance": "Não foi possível determinar.",
+        "seguranca": "Não foi possível determinar.",
+        "testes": "Nenhum teste específico foi evidenciado no diff.",
+        "melhorias": "Nenhuma melhoria específica foi identificada.",
+        "arquivos_principais": []
+    }
+
+    for field, default in defaults.items():
+        if field not in data or data[field] is None:
+            data[field] = default
+
     if data.get("categoria") not in ALLOWED_KINDS:
         data["categoria"] = "📝 Alteração"
 
@@ -989,6 +1041,12 @@ def normalize_review(data):
     data["confianca_geral"] = clamp_confidence(
         data.get("confianca_geral")
     )
+
+    if not isinstance(data.get("pontos_fortes"), list):
+        data["pontos_fortes"] = []
+
+    if not isinstance(data.get("arquivos_principais"), list):
+        data["arquivos_principais"] = []
 
     problems = data.get("problemas_encontrados")
 
