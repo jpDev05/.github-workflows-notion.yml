@@ -1,0 +1,44 @@
+name: AI DevOps Evaluation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "pr-review/**"
+      - "scripts/**"
+      - "tests/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Validate Python syntax
+        run: python -m compileall -q pr-review scripts tests
+      - name: Validate YAML
+        run: |
+          python - <<'PY'
+          import pathlib, yaml
+          for path in pathlib.Path(".github").rglob("*.yml"):
+              yaml.safe_load(path.read_text(encoding="utf-8"))
+          print("YAML validation passed")
+          PY
+      - name: Run security scanner contract
+        run: |
+          python scripts/security_scan.py > /tmp/security.json
+          python - <<'PY'
+          import json
+          data=json.load(open("/tmp/security.json",encoding="utf-8"))
+          assert data["scanner"] == "ai-devops-security-scan"
+          print("Security scanner contract passed")
+          PY
