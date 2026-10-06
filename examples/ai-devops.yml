@@ -1,0 +1,38 @@
+name: AI DevOps
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: AI DevOps Review
+        id: ai-review
+        uses: jpDev05/.github-workflows-notion.yml@v1
+        with:
+          groq-api-key: ${{ secrets.GROQ_API_KEY }}
+          notion-token: ${{ secrets.NOTION_TOKEN }}
+          notion-enabled: "true"
+          min-score: "0"
+          fail-on-high-risk: "false"
+
+      - name: Show AI DevOps result
+        run: |
+          echo "Quality: ${{ steps.ai-review.outputs.quality }}"
+          echo "Security: ${{ steps.ai-review.outputs.security }}"
+          echo "Maintainability: ${{ steps.ai-review.outputs.maintainability }}"
+          echo "Risk: ${{ steps.ai-review.outputs.risk }}"
+          echo "Confidence: ${{ steps.ai-review.outputs.confidence }}"
