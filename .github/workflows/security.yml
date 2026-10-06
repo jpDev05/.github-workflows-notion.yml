@@ -20,6 +20,6 @@ jobs:
           persist-credentials: false
       - name: Run security scanner
         env:
-          GITHUB_WORKSPACE: ${{{ github.workspace }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
           FAIL_ON_SECURITY_FINDINGS: "false"
         run: python3 scripts/security_scan.py
