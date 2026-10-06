@@ -1,0 +1,25 @@
+name: AI DevOps Security Intelligence
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Run security scanner
+        env:
+          GITHUB_WORKSPACE: ${{{ github.workspace }}
+          FAIL_ON_SECURITY_FINDINGS: "false"
+        run: python3 scripts/security_scan.py
