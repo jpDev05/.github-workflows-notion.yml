@@ -5,6 +5,11 @@ All notable changes to AI DevOps are documented here.
 ## [Unreleased]
 
 ### Added
+- Security Intelligence scanner.
+- CodeQL v4 workflow for Python and GitHub Actions.
+- Test Intelligence runner for common ecosystems.
+- AI evaluation standard and review fixtures.
+- Dependabot configuration.
 - Pull Request Intelligence action.
 - Inline findings anchored to added lines.
 - PR review decisions: COMMENT, APPROVE and REQUEST_CHANGES.
