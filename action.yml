@@ -92,3 +92,7 @@ runs:
         fi
 
         python3 "${GITHUB_ACTION_PATH}/notion_sync.py"
+
+branding:
+  icon: shield
+  color: purple
