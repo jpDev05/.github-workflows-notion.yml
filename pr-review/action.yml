@@ -1,0 +1,82 @@
+name: AI DevOps PR Review
+description: AI-powered pull request review with GitHub inline findings, quality gates and review decisions.
+author: João Pedro de Oliveira
+
+inputs:
+  groq-api-key:
+    description: Groq API key.
+    required: true
+  github-token:
+    description: GitHub token with pull-requests write permission when publishing reviews.
+    required: true
+  groq-model:
+    description: Groq model.
+    required: false
+    default: openai/gpt-oss-20b
+  review-event:
+    description: COMMENT, APPROVE or REQUEST_CHANGES.
+    required: false
+    default: COMMENT
+  min-score:
+    description: Minimum score for the quality gate. Use 0 to disable.
+    required: false
+    default: "0"
+  fail-on-high-risk:
+    description: Fail when the AI identifies High risk.
+    required: false
+    default: "false"
+  max-inline-findings:
+    description: Maximum number of inline findings.
+    required: false
+    default: "8"
+
+outputs:
+  quality:
+    description: Overall quality score.
+    value: \${{ steps.review.outputs.quality }}
+  security:
+    description: Security score.
+    value: \${{ steps.review.outputs.security }}
+  maintainability:
+    description: Maintainability score.
+    value: \${{ steps.review.outputs.maintainability }}
+  risk:
+    description: Overall risk.
+    value: \${{ steps.review.outputs.risk }}
+  confidence:
+    description: Review confidence.
+    value: \${{ steps.review.outputs.confidence }}
+  review-event:
+    description: GitHub review event actually submitted.
+    value: \${{ steps.review.outputs.review-event }}
+
+runs:
+  using: composite
+  steps:
+    - name: AI DevOps PR Review
+      id: review
+      shell: bash
+      env:
+        GROQ_API_KEY: \${{ inputs.groq-api-key }}
+        GITHUB_TOKEN: \${{ inputs.github-token }}
+        GROQ_MODEL: \${{ inputs.groq-model }}
+        AI_DEVOPS_REVIEW_EVENT: \${{ inputs.review-event }}
+        AI_DEVOPS_MIN_SCORE: \${{ inputs.min-score }}
+        AI_DEVOPS_FAIL_ON_HIGH_RISK: \${{ inputs.fail-on-high-risk }}
+        AI_DEVOPS_MAX_INLINE_FINDINGS: \${{ inputs.max-inline-findings }}
+        REPOSITORY: \${{ github.repository }}
+        PR_NUMBER: \${{ github.event.pull_request.number }}
+        BASE_SHA: \${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: \${{ github.event.pull_request.head.sha }}
+        MERGE_SHA: \${{ github.sha }}
+      run: |
+        set -euo pipefail
+        test -n "\${GROQ_API_KEY}" || {
+          echo "::error::GROQ_API_KEY não configurado"
+          exit 1
+        }
+        test -n "\${GITHUB_TOKEN}" || {
+          echo "::error::GITHUB_TOKEN não configurado"
+          exit 1
+        }
+        python3 "\${GITHUB_ACTION_PATH}/pr_review.py"
