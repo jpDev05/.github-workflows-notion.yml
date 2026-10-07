@@ -105,6 +105,8 @@ def read_text_file(path, limit=5000):
 
 def project_context():
     candidates = [
+        ".ai-devops/architecture.md",
+        ".ai-devops/decisions.md",
         "README.md",
         "README",
         "package.json",
