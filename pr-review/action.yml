@@ -9,6 +9,18 @@ inputs:
   github-token:
     description: GitHub token with pull-requests write permission when publishing reviews.
     required: true
+  ai-provider:
+    description: AI provider (groq or openai-compatible).
+    required: false
+    default: "groq"
+  ai-api-key:
+    description: API key for non-Groq providers.
+    required: false
+    default: ""
+  ai-endpoint:
+    description: OpenAI-compatible endpoint.
+    required: false
+    default: "https://api.openai.com/v1/chat/completions"
   groq-model:
     description: Groq model.
     required: false
@@ -62,6 +74,9 @@ runs:
       shell: bash
       env:
         GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        AI_DEVOPS_PROVIDER: ${{ inputs.ai-provider }}
+        AI_DEVOPS_API_KEY: ${{ inputs.ai-api-key }}
+        AI_DEVOPS_ENDPOINT: ${{ inputs.ai-endpoint }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
         GROQ_MODEL: ${{ inputs.groq-model }}
         AI_DEVOPS_REVIEW_EVENT: ${{ inputs.review-event }}
