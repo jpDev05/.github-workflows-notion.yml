@@ -25,11 +25,11 @@ inputs:
   min-score:
     description: Minimum score required by the quality gate. Use 0 to disable.
     required: false
-    default: "0"
+    default: ""
   fail-on-high-risk:
     description: Fail the action when the AI identifies high risk.
     required: false
-    default: "false"
+    default: ""
   policy-file:
     description: Repository policy file.
     required: false
