@@ -1,0 +1,24 @@
+name: AI DevOps README
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  readme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Update README health section
+        run: python3 scripts/readme_health.py
+      - name: Publish
+        run: |
+          git config user.name "ai-devops[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --cached --quiet || git commit -m "docs: update AI DevOps health section [skip ci]"
+          git push
