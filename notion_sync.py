@@ -18,9 +18,13 @@ REVIEW_POLICY = POLICY.get("review", {})
 NOTION_ENABLED = os.environ.get("NOTION_ENABLED", "true").lower() == "true"
 TOKEN = os.environ.get("NOTION_TOKEN", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-AI_PROVIDER = os.environ.get("AI_DEVOPS_PROVIDER", "groq").lower()
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "groq").lower()
 AI_API_KEY = os.environ.get("AI_DEVOPS_API_KEY", "")
-AI_ENDPOINT = os.environ.get("AI_DEVOPS_ENDPOINT", "https://api.openai.com/v1/chat/completions")
+AI_API_KEY_ACTIVE = GROQ_API_KEY if AI_PROVIDER == "groq" else AI_API_KEY
+AI_ENDPOINT = os.environ.get(
+    "AI_DEVOPS_ENDPOINT",
+    "https://api.openai.com/v1/chat/completions"
+)
 
 VERSION = "2025-09-03"
 
