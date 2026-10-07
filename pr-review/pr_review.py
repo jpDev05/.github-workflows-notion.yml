@@ -7,7 +7,10 @@ import urllib.error
 import urllib.request
 from policy import load
 
-GROQ_API_KEY = os.environ["GROQ_API_KEY"]
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY","")
+AI_PROVIDER = os.environ.get("AI_DEVOPS_PROVIDER","groq").lower()
+AI_API_KEY = os.environ.get("AI_DEVOPS_API_KEY","")
+AI_ENDPOINT = os.environ.get("AI_DEVOPS_ENDPOINT","https://api.openai.com/v1/chat/completions")
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 REPOSITORY = os.environ["REPOSITORY"]
 PR_NUMBER = int(os.environ["PR_NUMBER"])
@@ -198,11 +201,11 @@ def groq(prompt):
     }
 
     request = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
+        AI_ENDPOINT if AI_PROVIDER != "groq" else "https://api.groq.com/openai/v1/chat/completions",
         data=json.dumps(body, ensure_ascii=False).encode(),
         method="POST",
         headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Authorization": f"Bearer {GROQ_API_KEY if AI_PROVIDER == \"groq\" else AI_API_KEY}",
             "Content-Type": "application/json",
             "User-Agent": "ai-devops-pr-review/2.0",
         },
