@@ -91,7 +91,7 @@ jobs:
           fetch-depth: 0
 
       - name: AI DevOps Review
-        uses: jpDev05/.github-workflows-notion.yml@v2
+        uses: jpDev05/.github-workflows-notion.yml@v1
         with:
           groq-api-key: ${{ secrets.GROQ_API_KEY }}
           notion-token: ${{ secrets.NOTION_TOKEN }}
@@ -152,7 +152,7 @@ You can optionally fail the workflow when quality falls below a threshold:
 
 ```yaml
 - name: AI DevOps Review
-  uses: jpDev05/.github-workflows-notion.yml@v2
+  uses: jpDev05/.github-workflows-notion.yml@v1
   with:
     groq-api-key: ${{ secrets.GROQ_API_KEY }}
     notion-token: ${{ secrets.NOTION_TOKEN }}
@@ -194,7 +194,7 @@ Example:
 ```yaml
 - name: AI DevOps Review
   id: review
-  uses: jpDev05/.github-workflows-notion.yml@v2
+  uses: jpDev05/.github-workflows-notion.yml@v1
   with:
     groq-api-key: ${{ secrets.GROQ_API_KEY }}
     notion-enabled: "false"
@@ -254,7 +254,7 @@ The goal is not to maximize the number of findings. The goal is to maximize
 See docs/AI_EVALUATION.md and tests/fixtures/review-fixtures.md.
 ## 🧠 Pull Request Intelligence
 
-AI DevOps v2 adds a dedicated PR review action that can:
+AI DevOps adds a dedicated PR review action that can:
 
 - analyze the pull request diff with Groq Structured Outputs;
 - publish a professional review directly in the PR;
@@ -286,7 +286,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: jpDev05/.github-workflows-notion.yml/pr-review@v2
+      - uses: jpDev05/.github-workflows-notion.yml/pr-review@v1
         with:
           groq-api-key: ${{ secrets.GROQ_API_KEY }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -363,21 +363,22 @@ PR   → PR Review Action → Groq → Finding validation → GitHub review
 - [x] Test Intelligence
 - [x] AI evaluation standard
 - [x] Dependabot
-- [ ] Test evidence inside PR review
-- [ ] Repository architecture memory
-- [ ] Changelog automation
-- [ ] README automation
-- [ ] More output providers
+- [x] Test evidence inside PR review
+- [x] Repository architecture memory
+- [x] Changelog automation
+- [x] README automation
+- [x] More output providers
 
 ### v3 — Open Source Platform
-- [ ] AI Fix proposals
-- [ ] Safe automatic fix PRs
-- [ ] Multiple AI providers
-- [ ] Versioned review policies
-- [ ] Review profiles
-- [ ] Dashboard
-- [ ] Quality badges
-- [ ] GitHub Marketplace publication
+- [x] AI Fix proposals
+- [x] Safe automatic fix PRs
+- [x] Multiple AI providers
+- [x] Versioned review policies
+- [x] Review profiles
+- [x] Dashboard
+- [x] Quality badges
+- [x] GitHub Marketplace publication
+
 ## 🤝 Contributing
 
 Pull requests are welcome.
