@@ -182,7 +182,7 @@ def groq(prompt):
         ],
         "temperature": 0.1,
         "reasoning_effort": "medium",
-        "max_tokens": 2600,
+        "max_tokens": 3000,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -234,9 +234,21 @@ def groq(prompt):
                 if (
                     error.code == 400
                     and info.get("code") == "json_validate_failed"
-                    and isinstance(failed, str)
                 ):
-                    return json.loads(failed)
+                    if isinstance(failed, str) and failed.strip():
+                        try:
+                            return json.loads(failed)
+                        except json.JSONDecodeError:
+                            pass
+
+                    if attempt < 3:
+                        wait = attempt * 3
+                        print(
+                            "⚠️ Groq rejeitou a saída estruturada sem "
+                            f"geração recuperável; aguardando {wait}s e tentando novamente."
+                        )
+                        time.sleep(wait)
+                        continue
 
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
