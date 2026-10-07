@@ -7,7 +7,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  security-events: write
 
 jobs:
   documentar:
@@ -29,6 +30,37 @@ jobs:
           groq-model: "openai/gpt-oss-20b"
           min-score: "0"
           fail-on-high-risk: "false"
+
+      - name: Gerar SARIF do review
+        run: python3 scripts/review_sarif.py
+
+      - name: Publicar findings no GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ai-devops.sarif
+          category: ai-devops
+      - name: Registrar histórico de qualidade
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_DATE: ${{ github.event.head_commit.timestamp }}
+          REPOSITORY: ${{ github.repository }}
+          QUALITY: ${{ steps.ai-review.outputs.quality }}
+          SECURITY: ${{ steps.ai-review.outputs.security }}
+          MAINTAINABILITY: ${{ steps.ai-review.outputs.maintainability }}
+          RISK: ${{ steps.ai-review.outputs.risk }}
+          CONFIDENCE: ${{ steps.ai-review.outputs.confidence }}
+        run: python3 scripts/quality_history.py
+
+      - name: Atualizar quality badge
+        run: python3 scripts/quality_badge.py
+
+      - name: Publicar histórico
+        run: |
+          git config user.name "ai-devops[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/quality-history.json docs/quality-badge.svg
+          git diff --cached --quiet || git commit -m "chore: update AI quality history [skip ci]"
+          git push
 
       - name: Resultado
         run: |

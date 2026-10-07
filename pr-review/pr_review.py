@@ -5,8 +5,13 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from policy import load
 
-GROQ_API_KEY = os.environ["GROQ_API_KEY"]
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY","")
+AI_PROVIDER = os.environ.get("AI_DEVOPS_PROVIDER","groq").lower()
+AI_API_KEY = os.environ.get("AI_DEVOPS_API_KEY","")
+AI_ENDPOINT = os.environ.get("AI_DEVOPS_ENDPOINT","https://api.openai.com/v1/chat/completions")
+AI_API_KEY_ACTIVE = GROQ_API_KEY if AI_PROVIDER == "groq" else AI_API_KEY
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 REPOSITORY = os.environ["REPOSITORY"]
 PR_NUMBER = int(os.environ["PR_NUMBER"])
@@ -14,10 +19,13 @@ BASE_SHA = os.environ["BASE_SHA"]
 HEAD_SHA = os.environ["HEAD_SHA"]
 MERGE_SHA = os.environ.get("MERGE_SHA", HEAD_SHA)
 MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
-REVIEW_EVENT = os.environ.get("AI_DEVOPS_REVIEW_EVENT", "COMMENT").upper()
-MIN_SCORE = float(os.environ.get("AI_DEVOPS_MIN_SCORE", "0"))
-FAIL_ON_HIGH_RISK = os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK", "false").lower() == "true"
-MAX_INLINE = int(os.environ.get("AI_DEVOPS_MAX_INLINE_FINDINGS", "8"))
+POLICY=load()
+REVIEW_POLICY=POLICY.get("review",{})
+PR_POLICY=POLICY.get("pull_request",{})
+REVIEW_EVENT=(os.environ.get("AI_DEVOPS_REVIEW_EVENT") or PR_POLICY.get("event","COMMENT")).upper()
+MIN_SCORE = float(os.environ.get("AI_DEVOPS_MIN_SCORE") or REVIEW_POLICY.get("min_score",0))
+FAIL_ON_HIGH_RISK = str(os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK") if os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK") not in (None,"") else REVIEW_POLICY.get("fail_on_high_risk",False)).lower()=="true"
+MAX_INLINE = int(os.environ.get("AI_DEVOPS_MAX_INLINE_FINDINGS") or REVIEW_POLICY.get("max_inline_findings",8))
 
 if REVIEW_EVENT not in {"COMMENT", "APPROVE", "REQUEST_CHANGES"}:
     raise RuntimeError("review-event deve ser COMMENT, APPROVE ou REQUEST_CHANGES.")
@@ -182,7 +190,7 @@ def groq(prompt):
         ],
         "temperature": 0.1,
         "reasoning_effort": "medium",
-        "max_tokens": 3000,
+        "max_tokens": 1800,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -194,11 +202,11 @@ def groq(prompt):
     }
 
     request = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
+        AI_ENDPOINT if AI_PROVIDER != "groq" else "https://api.groq.com/openai/v1/chat/completions",
         data=json.dumps(body, ensure_ascii=False).encode(),
         method="POST",
         headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Authorization": f"Bearer {AI_API_KEY_ACTIVE}",
             "Content-Type": "application/json",
             "User-Agent": "ai-devops-pr-review/2.0",
         },

@@ -25,5 +25,12 @@ def main():
     if output:
         with open(output,"a",encoding="utf-8") as f:
             f.write(f"status={result['status']}\nexit-code={code}\n")
+    summary=os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary,"a",encoding="utf-8") as f:
+            f.write("## Test Intelligence\\n\\n")
+            f.write(f"- Status: **{result['status']}**\\n")
+            f.write(f"- Command: {' '.join(command)}\\n")
+            f.write(f"- Exit code: `{code}`\\n")
     raise SystemExit(code)
 if __name__=="__main__": main()

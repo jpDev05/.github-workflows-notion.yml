@@ -6,14 +6,21 @@ import urllib.request
 import urllib.error
 import time
 
+from scripts.policy import load_policy
+
 
 # =========================================================
 # CONFIGURAÇÕES
 # =========================================================
 
+POLICY = load_policy()
+REVIEW_POLICY = POLICY.get("review", {})
 NOTION_ENABLED = os.environ.get("NOTION_ENABLED", "true").lower() == "true"
 TOKEN = os.environ.get("NOTION_TOKEN", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+AI_PROVIDER = os.environ.get("AI_DEVOPS_PROVIDER", "groq").lower()
+AI_API_KEY = os.environ.get("AI_DEVOPS_API_KEY", "")
+AI_ENDPOINT = os.environ.get("AI_DEVOPS_ENDPOINT", "https://api.openai.com/v1/chat/completions")
 
 VERSION = "2025-09-03"
 
@@ -27,17 +34,14 @@ GROQ_MODEL = os.environ.get(
     "openai/gpt-oss-20b"
 )
 
-MIN_SCORE = float(
-    os.environ.get("AI_DEVOPS_MIN_SCORE", "0")
-)
+MIN_SCORE = float(os.environ.get("AI_DEVOPS_MIN_SCORE") or REVIEW_POLICY.get("min_score", 0))
 
-FAIL_ON_HIGH_RISK = (
-    os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK", "false").lower()
-    == "true"
-)
+FAIL_ON_HIGH_RISK = (str(os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK") if os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK") not in (None, "") else REVIEW_POLICY.get("fail_on_high_risk", False)).lower() == "true")
 
-if not GROQ_API_KEY:
+if AI_PROVIDER == "groq" and not GROQ_API_KEY:
     raise RuntimeError("GROQ_API_KEY não configurado.")
+if AI_PROVIDER != "groq" and not AI_API_KEY:
+    raise RuntimeError("AI_DEVOPS_API_KEY não configurado.")
 
 if NOTION_ENABLED and not TOKEN:
     raise RuntimeError(
@@ -106,6 +110,8 @@ def read_text_file(path, limit=5000):
 
 def project_context():
     candidates = [
+        ".ai-devops/architecture.md",
+        ".ai-devops/decisions.md",
         "README.md",
         "README",
         "package.json",
@@ -428,13 +434,13 @@ def groq(prompt):
     data = json.dumps(body, ensure_ascii=False).encode()
 
     req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
+        AI_ENDPOINT if AI_PROVIDER != "groq" else "https://api.groq.com/openai/v1/chat/completions",
         data=data,
         method="POST",
         headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Authorization": f"Bearer {AI_API_KEY_ACTIVE}",
             "Content-Type": "application/json",
-            "User-Agent": "ai-devops/2.0"
+            "User-Agent": "ai-devops/3.0"
         }
     )
 
@@ -1193,6 +1199,20 @@ main_files = clean_list(
     analysis["arquivos_principais"]
 )
 
+
+# =========================================================
+# EXPORTAR REVIEW PARA OUTROS CONSUMIDORES
+# =========================================================
+
+review_payload = dict(analysis)
+review_payload.update({
+    "repository": REPO,
+    "commit_sha": SHA,
+    "commit_url": COMMIT_URL,
+    "date": DATE,
+})
+with open("ai-devops-review.json", "w", encoding="utf-8") as review_file:
+    json.dump(review_payload, review_file, ensure_ascii=False, indent=2)
 
 # =========================================================
 # BUSCAR PROJETO NO NOTION

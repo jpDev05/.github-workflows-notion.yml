@@ -8,8 +8,21 @@ inputs:
     required: false
     default: ""
   groq-api-key:
-    description: Groq API key.
-    required: true
+    description: Groq API key. Used when ai-provider is groq.
+    required: false
+    default: ""
+  ai-provider:
+    description: AI provider (groq or openai-compatible).
+    required: false
+    default: "groq"
+  ai-api-key:
+    description: API key for non-Groq providers.
+    required: false
+    default: ""
+  ai-endpoint:
+    description: OpenAI-compatible chat completions endpoint.
+    required: false
+    default: "https://api.openai.com/v1/chat/completions"
   notion-data-source:
     description: Notion data source ID.
     required: false
@@ -29,7 +42,11 @@ inputs:
   fail-on-high-risk:
     description: Fail the action when the AI identifies high risk.
     required: false
-    default: "false"
+    default: ""
+  policy-file:
+    description: Repository AI DevOps policy file.
+    required: false
+    default: ".ai-devops.yml"
 
 outputs:
   quality:
@@ -57,11 +74,15 @@ runs:
       env:
         NOTION_TOKEN: ${{ inputs.notion-token }}
         GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        AI_DEVOPS_PROVIDER: ${{ inputs.ai-provider }}
+        AI_DEVOPS_API_KEY: ${{ inputs.ai-api-key }}
+        AI_DEVOPS_ENDPOINT: ${{ inputs.ai-endpoint }}
         NOTION_DATA_SOURCE: ${{ inputs.notion-data-source }}
         GROQ_MODEL: ${{ inputs.groq-model }}
         NOTION_ENABLED: ${{ inputs.notion-enabled }}
         AI_DEVOPS_MIN_SCORE: ${{ inputs.min-score }}
         AI_DEVOPS_FAIL_ON_HIGH_RISK: ${{ inputs.fail-on-high-risk }}
+        AI_DEVOPS_POLICY_FILE: ${{ inputs.policy-file }}
 
         COMMIT_SHA: ${{ github.sha }}
         BEFORE_SHA: ${{ github.event.before }}
@@ -79,10 +100,17 @@ runs:
       run: |
         set -euo pipefail
 
-        test -n "${GROQ_API_KEY}" || {
-          echo "::error::GROQ_API_KEY não configurado"
-          exit 1
-        }
+        if [ "${AI_DEVOPS_PROVIDER}" = "groq" ]; then
+          test -n "${GROQ_API_KEY}" || {
+            echo "::error::GROQ_API_KEY não configurado para provider=groq"
+            exit 1
+          }
+        else
+          test -n "${AI_DEVOPS_API_KEY}" || {
+            echo "::error::AI API key não configurada para provider=${AI_DEVOPS_PROVIDER}"
+            exit 1
+          }
+        fi
 
         if [ "${NOTION_ENABLED}" = "true" ]; then
           test -n "${NOTION_TOKEN}" || {

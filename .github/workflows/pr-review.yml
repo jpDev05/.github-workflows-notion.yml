@@ -25,15 +25,11 @@ jobs:
 
       - name: AI DevOps PR Review
         if: ${{ env.GROQ_API_KEY != '' }}
-        uses: jpDev05/.github-workflows-notion.yml/pr-review@v2
+        uses: ./pr-review
         with:
           groq-api-key: ${{ secrets.GROQ_API_KEY }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           groq-model: openai/gpt-oss-20b
-          review-event: COMMENT
-          min-score: "0"
-          fail-on-high-risk: "false"
-          max-inline-findings: "8"
 
       - name: Aviso de configuração
         if: ${{ env.GROQ_API_KEY == '' }}
