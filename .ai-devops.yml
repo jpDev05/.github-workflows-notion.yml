@@ -1,0 +1,24 @@
+version: 1
+
+review:
+  language: pt-BR
+  profile: professional
+  min_score: 0
+  fail_on_high_risk: false
+  max_inline_findings: 8
+
+pull_request:
+  event: COMMENT
+
+security:
+  evidence_first: true
+  sarif: true
+
+tests:
+  enabled: true
+
+architecture:
+  enabled: true
+
+history:
+  enabled: true
