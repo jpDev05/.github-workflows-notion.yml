@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI DevOps Dashboard</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:1100px;margin:40px auto;padding:0 20px;background:#111;color:#eee}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{background:#1c1c1c;border:1px solid #333;border-radius:12px;padding:18px}
+.big{font-size:32px;font-weight:700}.muted{color:#aaa}table{width:100%;margin-top:24px;border-collapse:collapse}td,th{padding:10px;border-bottom:1px solid #333;text-align:left}
+@media(max-width:800px){.grid{grid-template-columns:1fr 1fr}}
+</style>
+<h1>🤖 AI DevOps Dashboard</h1><p class="muted">Quality history from <code>docs/quality-history.json</code></p>
+<div id="cards" class="grid"></div><table><thead><tr><th>Commit</th><th>Quality</th><th>Security</th><th>Maintainability</th><th>Risk</th></tr></thead><tbody id="rows"></tbody></table>
+<script>
+fetch('quality-history.json').then(r=>r.json()).then(h=>{
+ const e=h[h.length-1]||{}; const fields=[['Quality',e.quality],['Security',e.security],['Maintainability',e.maintainability],['Risk',e.risk||'N/A']];
+ cards.innerHTML=fields.map(x=>'<div class="card"><div class="muted">'+x[0]+'</div><div class="big">'+x[1]+'</div></div>').join('');
+ rows.innerHTML=h.slice().reverse().map(x=>'<tr><td>'+String(x.sha).slice(0,7)+'</td><td>'+x.quality+'</td><td>'+x.security+'</td><td>'+x.maintainability+'</td><td>'+x.risk+'</td></tr>').join('');
+});
+</script>
