@@ -16,19 +16,23 @@ inputs:
   review-event:
     description: COMMENT, APPROVE or REQUEST_CHANGES.
     required: false
-    default: COMMENT
+    default: ""
   min-score:
     description: Minimum score for the quality gate. Use 0 to disable.
     required: false
-    default: "0"
+    default: ""
   fail-on-high-risk:
     description: Fail when the AI identifies High risk.
     required: false
-    default: "false"
+    default: ""
   max-inline-findings:
     description: Maximum number of inline findings.
     required: false
-    default: "8"
+    default: ""
+  policy-file:
+    description: Repository AI DevOps policy file.
+    required: false
+    default: ".ai-devops.yml"
 
 outputs:
   quality:
@@ -64,6 +68,7 @@ runs:
         AI_DEVOPS_MIN_SCORE: ${{ inputs.min-score }}
         AI_DEVOPS_FAIL_ON_HIGH_RISK: ${{ inputs.fail-on-high-risk }}
         AI_DEVOPS_MAX_INLINE_FINDINGS: ${{ inputs.max-inline-findings }}
+        AI_DEVOPS_POLICY_FILE: ${{ inputs.policy-file }}
         REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
