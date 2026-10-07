@@ -1,0 +1,36 @@
+name: AI DevOps Changelog
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: Number of commits to inspect
+        required: false
+        default: "50"
+
+permissions:
+  contents: write
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Generate
+        env:
+          CHANGELOG_LIMIT: ${{ inputs.limit }}
+        run: python3 scripts/changelog.py
+      - name: Publish
+        run: |
+          cp CHANGELOG.generated.md CHANGELOG.md
+          git config user.name "ai-devops[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git diff --cached --quiet || git commit -m "docs: automate changelog update [skip ci]"
+          git push
