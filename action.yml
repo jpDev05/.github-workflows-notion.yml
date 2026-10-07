@@ -29,7 +29,11 @@ inputs:
   fail-on-high-risk:
     description: Fail the action when the AI identifies high risk.
     required: false
-    default: "false"
+    default: ""
+  policy-file:
+    description: Repository AI DevOps policy file.
+    required: false
+    default: ".ai-devops.yml"
 
 outputs:
   quality:
@@ -62,6 +66,7 @@ runs:
         NOTION_ENABLED: ${{ inputs.notion-enabled }}
         AI_DEVOPS_MIN_SCORE: ${{ inputs.min-score }}
         AI_DEVOPS_FAIL_ON_HIGH_RISK: ${{ inputs.fail-on-high-risk }}
+        AI_DEVOPS_POLICY_FILE: ${{ inputs.policy-file }}
 
         COMMIT_SHA: ${{ github.sha }}
         BEFORE_SHA: ${{ github.event.before }}
