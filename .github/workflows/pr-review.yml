@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 0
 
       - name: AI DevOps PR Review
-        if: ${{ env.GROQ_API_KEY != '' }}
+        if: ${{ env.GROQ_API_KEY != '' && github.repository != 'jpDev05/.github-workflows-notion.yml' }}
         uses: ./pr-review
         with:
           groq-api-key: ${{ secrets.GROQ_API_KEY }}
