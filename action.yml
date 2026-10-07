@@ -8,8 +8,21 @@ inputs:
     required: false
     default: ""
   groq-api-key:
-    description: Groq API key.
-    required: true
+    description: Groq API key. Used when ai-provider is groq.
+    required: false
+    default: ""
+  ai-provider:
+    description: AI provider (groq or openai-compatible).
+    required: false
+    default: "groq"
+  ai-api-key:
+    description: API key for non-Groq providers.
+    required: false
+    default: ""
+  ai-endpoint:
+    description: OpenAI-compatible chat completions endpoint.
+    required: false
+    default: "https://api.openai.com/v1/chat/completions"
   notion-data-source:
     description: Notion data source ID.
     required: false
@@ -61,6 +74,9 @@ runs:
       env:
         NOTION_TOKEN: ${{ inputs.notion-token }}
         GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        AI_DEVOPS_PROVIDER: ${{ inputs.ai-provider }}
+        AI_DEVOPS_API_KEY: ${{ inputs.ai-api-key }}
+        AI_DEVOPS_ENDPOINT: ${{ inputs.ai-endpoint }}
         NOTION_DATA_SOURCE: ${{ inputs.notion-data-source }}
         GROQ_MODEL: ${{ inputs.groq-model }}
         NOTION_ENABLED: ${{ inputs.notion-enabled }}
