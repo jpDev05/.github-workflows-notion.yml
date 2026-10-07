@@ -16,7 +16,7 @@ inputs:
   review-event:
     description: COMMENT, APPROVE or REQUEST_CHANGES.
     required: false
-    default: COMMENT
+    default: ""
   min-score:
     description: Minimum score for the quality gate. Use 0 to disable.
     required: false
