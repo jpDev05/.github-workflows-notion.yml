@@ -18,6 +18,9 @@ REVIEW_POLICY = POLICY.get("review", {})
 NOTION_ENABLED = os.environ.get("NOTION_ENABLED", "true").lower() == "true"
 TOKEN = os.environ.get("NOTION_TOKEN", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+AI_PROVIDER = os.environ.get("AI_DEVOPS_PROVIDER", "groq").lower()
+AI_API_KEY = os.environ.get("AI_DEVOPS_API_KEY", "")
+AI_ENDPOINT = os.environ.get("AI_DEVOPS_ENDPOINT", "https://api.openai.com/v1/chat/completions")
 
 VERSION = "2025-09-03"
 
@@ -35,8 +38,10 @@ MIN_SCORE = float(os.environ.get("AI_DEVOPS_MIN_SCORE") or REVIEW_POLICY.get("mi
 
 FAIL_ON_HIGH_RISK = (str(os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK") if os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK") not in (None, "") else REVIEW_POLICY.get("fail_on_high_risk", False)).lower() == "true")
 
-if not GROQ_API_KEY:
+if AI_PROVIDER == "groq" and not GROQ_API_KEY:
     raise RuntimeError("GROQ_API_KEY não configurado.")
+if AI_PROVIDER != "groq" and not AI_API_KEY:
+    raise RuntimeError("AI_DEVOPS_API_KEY não configurado.")
 
 if NOTION_ENABLED and not TOKEN:
     raise RuntimeError(
@@ -429,13 +434,13 @@ def groq(prompt):
     data = json.dumps(body, ensure_ascii=False).encode()
 
     req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
+        AI_ENDPOINT if AI_PROVIDER != "groq" else "https://api.groq.com/openai/v1/chat/completions",
         data=data,
         method="POST",
         headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Authorization": f"Bearer {GROQ_API_KEY if AI_PROVIDER == \"groq\" else AI_API_KEY}",
             "Content-Type": "application/json",
-            "User-Agent": "ai-devops/2.0"
+            "User-Agent": "ai-devops/3.0"
         }
     )
 
