@@ -1,0 +1,12 @@
+version: 1
+review:
+  language: pt-BR
+  profile: security
+  min_score: 8
+  fail_on_high_risk: true
+  max_inline_findings: 12
+pull_request:
+  event: REQUEST_CHANGES
+security:
+  evidence_first: true
+  sarif: true
