@@ -177,7 +177,8 @@ Both controls are disabled by default.
 | `groq-model` | `openai/gpt-oss-20b` | Groq model |
 | `notion-enabled` | `true` | Enable Notion synchronization |
 | `min-score` | `0` | Minimum quality/security/maintainability score |
-| `fail-on-high-risk` | `false` | Fail on High risk |
+| `fail-on-high-risk` | policy/default | Fail on High risk |
+| `policy-file` | `.ai-devops.yml` | Repository policy file |
 
 ## 📤 Outputs
 
@@ -309,6 +310,36 @@ to untrusted code.
 
 Copy `config/.ai-devops.yml` to the root of a consuming repository as
 `.ai-devops.yml` and adapt the review policy for the project.
+
+The policy is now loaded automatically by both the core action and the PR
+review action. It can control:
+
+- review profile and language metadata;
+- minimum score;
+- fail-on-high-risk behavior;
+- PR review event (`COMMENT`, `REQUEST_CHANGES` or guarded `APPROVE`);
+- maximum inline findings;
+- path patterns reserved for future filtering.
+
+Example:
+
+```yaml
+version: 1
+
+review:
+  language: pt-BR
+  profile: professional
+  max_inline_findings: 8
+  min_score: 7
+  fail_on_high_risk: true
+
+pull_request:
+  event: COMMENT
+```
+
+Explicit action inputs take precedence over the repository policy. This makes
+the same policy reusable across repositories while preserving per-workflow
+overrides.
 
 ## 📚 Notion
 
