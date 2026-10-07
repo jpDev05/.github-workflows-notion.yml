@@ -51,11 +51,14 @@ jobs:
           CONFIDENCE: ${{ steps.ai-review.outputs.confidence }}
         run: python3 scripts/quality_history.py
 
+      - name: Atualizar quality badge
+        run: python3 scripts/quality_badge.py
+
       - name: Publicar histórico
         run: |
           git config user.name "ai-devops[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/quality-history.json
+          git add docs/quality-history.json docs/quality-badge.svg
           git diff --cached --quiet || git commit -m "chore: update AI quality history [skip ci]"
           git push
 
