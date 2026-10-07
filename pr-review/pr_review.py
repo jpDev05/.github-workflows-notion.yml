@@ -205,7 +205,7 @@ def groq(prompt):
         data=json.dumps(body, ensure_ascii=False).encode(),
         method="POST",
         headers={
-            "Authorization": f"Bearer {GROQ_API_KEY if AI_PROVIDER == \"groq\" else AI_API_KEY}",
+            "Authorization": f"Bearer {AI_API_KEY_ACTIVE}",
             "Content-Type": "application/json",
             "User-Agent": "ai-devops-pr-review/2.0",
         },
