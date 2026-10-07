@@ -177,7 +177,7 @@ Both controls are disabled by default.
 | `groq-model` | `openai/gpt-oss-20b` | Groq model |
 | `notion-enabled` | `true` | Enable Notion synchronization |
 | `min-score` | `0` | Minimum quality/security/maintainability score |
-| `fail-on-high-risk` | `false` | Fail on High risk |
+| `fail-on-high-risk` | policy/default | Fail on High risk |\n| `policy-file` | `.ai-devops.yml` | Repository policy |\n| `ai-provider` | `groq` | AI provider |\n| `ai-api-key` | empty | Key for non-Groq providers |\n| `ai-endpoint` | OpenAI endpoint | OpenAI-compatible endpoint |
 
 ## 📤 Outputs
 
@@ -310,7 +310,7 @@ to untrusted code.
 Copy `config/.ai-devops.yml` to the root of a consuming repository as
 `.ai-devops.yml` and adapt the review policy for the project.
 
-## 📚 Notion
+## 📈 Quality history and badge\n\nThe main workflow persists the last 200 review scores in `docs/quality-history.json` and updates `docs/quality-badge.svg`. A static dashboard is available in `docs/index.html` and can be deployed with the GitHub Pages workflow.\n\n## 🧠 Architecture memory\n\nProjects can keep durable engineering constraints in `.ai-devops/architecture.md` and `.ai-devops/decisions.md`. The core reviewer includes these files in its project context.\n\n## 🛠️ AI Fix\n\nThe manual `AI DevOps AI Fix` workflow generates a minimal, evidence-backed patch, validates it with `git apply --check`, runs detectable tests without privileged secrets, and opens a human-reviewable pull request. It never merges directly.\n\n## 🔐 SARIF\n\nAI findings are exported to SARIF and uploaded to GitHub code scanning by the main review workflow.\n\n## 🤖 Multiple AI providers\n\nThe default is Groq. The action also supports OpenAI-compatible chat-completions endpoints:\n\n```yaml\nai-provider: openai-compatible\nai-api-key: ${{ secrets.OPENAI_API_KEY }}\nai-endpoint: https://api.openai.com/v1/chat/completions\n```\n\n## 📚 Notion
 
 When enabled, AI DevOps creates or updates the project's Notion page with:
 
