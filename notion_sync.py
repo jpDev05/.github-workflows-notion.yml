@@ -1196,6 +1196,20 @@ main_files = clean_list(
 
 
 # =========================================================
+# EXPORTAR REVIEW PARA OUTROS CONSUMIDORES
+# =========================================================
+
+review_payload = dict(analysis)
+review_payload.update({
+    "repository": REPO,
+    "commit_sha": SHA,
+    "commit_url": COMMIT_URL,
+    "date": DATE,
+})
+with open("ai-devops-review.json", "w", encoding="utf-8") as review_file:
+    json.dump(review_payload, review_file, ensure_ascii=False, indent=2)
+
+# =========================================================
 # BUSCAR PROJETO NO NOTION
 # =========================================================
 
