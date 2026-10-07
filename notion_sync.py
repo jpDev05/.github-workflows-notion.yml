@@ -6,12 +6,17 @@ import urllib.request
 import urllib.error
 import time
 
+from scripts.policy import load_policy, review_config
+
 
 # =========================================================
 # CONFIGURAÇÕES
 # =========================================================
 
 NOTION_ENABLED = os.environ.get("NOTION_ENABLED", "true").lower() == "true"
+
+POLICY = load_policy()
+REVIEW_POLICY = review_config(POLICY)
 TOKEN = os.environ.get("NOTION_TOKEN", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
@@ -28,11 +33,16 @@ GROQ_MODEL = os.environ.get(
 )
 
 MIN_SCORE = float(
-    os.environ.get("AI_DEVOPS_MIN_SCORE", "0")
+    os.environ.get("AI_DEVOPS_MIN_SCORE")
+    or REVIEW_POLICY.get("min_score", 0)
 )
 
 FAIL_ON_HIGH_RISK = (
-    os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK", "false").lower()
+    (
+        os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK")
+        if os.environ.get("AI_DEVOPS_FAIL_ON_HIGH_RISK") not in (None, "")
+        else str(REVIEW_POLICY.get("fail_on_high_risk", False))
+    ).lower()
     == "true"
 )
 
