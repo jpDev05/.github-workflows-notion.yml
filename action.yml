@@ -100,10 +100,17 @@ runs:
       run: |
         set -euo pipefail
 
-        test -n "${GROQ_API_KEY}" || {
-          echo "::error::GROQ_API_KEY não configurado"
-          exit 1
-        }
+        if [ "${AI_DEVOPS_PROVIDER}" = "groq" ]; then
+          test -n "${GROQ_API_KEY}" || {
+            echo "::error::GROQ_API_KEY não configurado para provider=groq"
+            exit 1
+          }
+        else
+          test -n "${AI_DEVOPS_API_KEY}" || {
+            echo "::error::AI API key não configurada para provider=${AI_DEVOPS_PROVIDER}"
+            exit 1
+          }
+        fi
 
         if [ "${NOTION_ENABLED}" = "true" ]; then
           test -n "${NOTION_TOKEN}" || {
