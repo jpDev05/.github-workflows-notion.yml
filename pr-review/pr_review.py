@@ -66,7 +66,7 @@ def project_context():
         content = read_file(path)
         if content:
             chunks.append(f"===== {path} =====\n{content}")
-    return "\n\n".join(chunks)[:4500]
+    return "\n\n".join(chunks)[:1800]
 
 
 SCHEMA = {
@@ -190,7 +190,7 @@ def groq(prompt):
         ],
         "temperature": 0.1,
         "reasoning_effort": "medium",
-        "max_tokens": 1800,
+        "max_tokens": 1600,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -419,12 +419,12 @@ def review_body(review, inline_count, skipped_count):
 def main():
     print(f"🔎 Analisando PR #{PR_NUMBER}: {REPOSITORY}")
 
-    diff = git("diff", "--no-ext-diff", "--unified=40", BASE_SHA, HEAD_SHA)
+    diff = git("diff", "--no-ext-diff", "--unified=20", BASE_SHA, HEAD_SHA)
 
     if not diff:
         raise RuntimeError("O diff da pull request está vazio.")
 
-    max_diff = 14000
+    max_diff = 6000
     if len(diff) > max_diff:
         diff = diff[:max_diff] + "\n\n[DIFF TRUNCADO AUTOMATICAMENTE]\n"
 
