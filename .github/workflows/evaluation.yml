@@ -36,6 +36,9 @@ jobs:
               yaml.safe_load(path.read_text(encoding="utf-8"))
           print("YAML validation passed")
           PY
+      - name: Install test runner
+        run: python -m pip install pytest
+
       - name: Run repository policy tests
         run: python -m pytest -q tests/test_policy.py tests/test_security_scan.py
 
