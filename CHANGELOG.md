@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Added automatic loading of the consumer repository `.ai-devops.yml` policy.
+- Added dependency-free policy parsing so consuming repositories do not need PyYAML.
+- Added policy-driven PR review event, quality gate defaults and inline finding limits.
+- Added regression tests for policy parsing and safe defaults.
+
+
 All notable changes to AI DevOps are documented here.
 
 ## [Unreleased]
