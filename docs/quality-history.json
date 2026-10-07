@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "sha": "617e617f4ad3a8a39834c9e599f2416c0696c165",
+    "date": "2026-10-07T17:18:13-03:00",
+    "repository": "jpDev05/.github-workflows-notion.yml",
+    "quality": 8.0,
+    "security": 8.0,
+    "maintainability": 7.0,
+    "risk": "Médio",
+    "confidence": 0.9
+  }
+]
