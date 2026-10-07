@@ -68,6 +68,7 @@ runs:
         AI_DEVOPS_MIN_SCORE: ${{ inputs.min-score }}
         AI_DEVOPS_FAIL_ON_HIGH_RISK: ${{ inputs.fail-on-high-risk }}
         AI_DEVOPS_MAX_INLINE_FINDINGS: ${{ inputs.max-inline-findings }}
+        AI_DEVOPS_POLICY_FILE: ${{ inputs.policy-file }}
         REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
